@@ -1,0 +1,8 @@
+#!/bin/bash
+# After creating the new GitHub repository, run these commands:
+
+# Add the new remote
+git remote add origin https://github.com/bhanu1232/RepoRAG.git
+
+# Push your code (the .env is now properly excluded)
+git push -u origin main
