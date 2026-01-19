@@ -1,0 +1,6 @@
+# After creating the NEW GitHub repository, run these commands:
+
+git remote add origin https://github.com/bhanu1232/RepoRAG.git
+git push -u origin main
+
+# That's it! Your code will be pushed without any secrets.
