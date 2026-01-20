@@ -111,7 +111,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                     ) : (
                         <>
                             {/* Sticky Header with Repo Title and Clear Button */}
-                            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2 bg-white/90 dark:bg-[#212121]/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
+                            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 bg-[#212121] border-b-2 border-[#27272a]">
                                 <div className="flex items-center gap-2 min-w-0">
                                     <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -160,8 +160,8 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
             </div>
 
             {/* Input Area - Compact */}
-            <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#212121]">
-                <div className="max-w-3xl mx-auto px-4 py-3">
+            <div className="border-t border-gray-200 dark:border-[#27272a] bg-white dark:bg-[#212121]">
+                <div className="max-w-3xl mx-auto px-4 py-2.5">
                     {/* Input Form */}
                     <form onSubmit={handleSend} className="flex gap-2">
                         <textarea
@@ -175,7 +175,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                                 }
                             }}
                             placeholder="Ask about the codebase..."
-                            className="flex-1 bg-gray-100 dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none scrollbar-hide"
+                            className="flex-1 bg-gray-100 dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none scrollbar-hide"
                             rows="1"
                             style={{ maxHeight: '120px' }}
                             disabled={loading}
