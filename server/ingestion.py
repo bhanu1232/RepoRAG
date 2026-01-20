@@ -22,6 +22,12 @@ class RepositoryIngestion:
             model_name="BAAI/bge-small-en-v1.5"
         )
         
+        # Progress tracking
+        self.progress = 0
+        self.current_stage = ""
+        self.total_files = 0
+        self.processed_files = 0
+        
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         
@@ -41,6 +47,12 @@ class RepositoryIngestion:
         
         self.pinecone_index = pc.Index(index_name)
         self.vector_store = PineconeVectorStore(pinecone_index=self.pinecone_index)
+    
+    def update_progress(self, stage: str, progress: int):
+        """Update the current progress."""
+        self.current_stage = stage
+        self.progress = progress
+        print(f"Progress: {progress}% - {stage}")
     
     def clear_index(self):
         """Clear all vectors from the Pinecone index."""
@@ -139,21 +151,33 @@ class RepositoryIngestion:
         """Main method to clone, chunk, and index a repository."""
         repo_path = None
         
+        # Reset progress at start
+        self.progress = 0
+        self.current_stage = "Starting"
+        
         try:
-            # Clear existing data to ensure only the new repository is indexed
+            # Stage 1: Clear existing data (0-10%)
+            self.update_progress("Preparing index", 0)
             self.clear_index()
+            self.update_progress("Index cleared", 10)
             
-            # Clone the repository
+            # Stage 2: Clone the repository (10-30%)
+            self.update_progress("Cloning repository", 15)
             repo_path = self.clone_repository(repo_url)
+            self.update_progress("Repository cloned", 30)
             
-            # Load and chunk the code
+            # Stage 3: Load and chunk the code (30-60%)
+            self.update_progress("Processing files", 35)
             nodes = self.load_and_chunk_code(repo_path)
+            self.update_progress("Files processed", 60)
             
-            # Create storage context and index
+            # Stage 4: Create embeddings and index (60-100%)
+            self.update_progress("Creating embeddings", 65)
             storage_context = StorageContext.from_defaults(
                 vector_store=self.vector_store
             )
             
+            self.update_progress("Indexing vectors", 75)
             # Create the index
             index = VectorStoreIndex(
                 nodes=nodes,
@@ -161,6 +185,8 @@ class RepositoryIngestion:
                 embed_model=self.embed_model,
                 show_progress=True,
             )
+            
+            self.update_progress("Complete", 100)
             
             return {
                 "success": True,
@@ -170,6 +196,7 @@ class RepositoryIngestion:
             }
             
         except Exception as e:
+            self.update_progress("Error occurred", 0)
             import traceback
             traceback.print_exc()
             return {

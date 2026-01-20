@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import RepoForm from './components/RepoForm';
 import ChatWindow from './components/ChatWindow';
 import { Terminal, Database, MessageSquare, Menu, Plus } from 'lucide-react';
-
+import logo from './assets/logo.png';
 function App() {
   const [isRepoIndexed, setIsRepoIndexed] = useState(false);
+  const [repoUrl, setRepoUrl] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [suggestedPrompt, setSuggestedPrompt] = useState('');
 
@@ -55,7 +56,13 @@ function App() {
             <h3 className="px-2 text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
               Active Repository
             </h3>
-            <RepoForm onRepoIndexed={() => setIsRepoIndexed(true)} />
+            <RepoForm
+              onRepoIndexed={(url) => {
+                setIsRepoIndexed(true);
+                setRepoUrl(url);
+              }}
+              isIndexed={isRepoIndexed}
+            />
           </div>
 
           {/* Suggestions Section */}
@@ -85,8 +92,8 @@ function App() {
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-white/10 bg-[#000000]">
           <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-zinc-900 transition-colors cursor-pointer group">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-900 flex items-center justify-center shadow-lg shadow-emerald-900/20 group-hover:shadow-emerald-900/40 transition-all">
-              <Terminal className="h-5 w-5 text-white" />
+            <div className="h-9 w-9 overflow-hidden pt-4 rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-900 flex items-center justify-center shadow-lg shadow-emerald-900/20 group-hover:shadow-emerald-900/40 transition-all">
+              <img src={logo} alt="Logo" className="w-6 h-6 rounded-full flex items-center justify-center mb-4 mx-auto" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-white truncate">RepoRAG Pro</div>
@@ -99,13 +106,14 @@ function App() {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full relative bg-zinc-900">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full relative bg-zinc-900">
         <ChatWindow
           isRepoIndexed={isRepoIndexed}
           suggestedPrompt={suggestedPrompt}
+          repoUrl={repoUrl}
         />
-      </main>
+      </div>
     </div>
   );
 }

@@ -88,6 +88,24 @@ class RAGQueryEngine:
     def _get_intent_specific_instructions(self, intent: QueryIntent) -> str:
         """Get specialized instructions based on query intent."""
         instructions = {
+            QueryIntent.SUMMARY: (
+                "Provide a CONCISE, HIGH-LEVEL summary. "
+                "Do NOT show code unless absolutely necessary. "
+                "Focus on the 'what' and 'why' of the project/component. "
+                "Keep it under 3-4 paragraphs."
+            ),
+            QueryIntent.QNA: (
+                "Provide a DIRECT, SHORT answer. "
+                "No need for deep technical elaboration unless asked. "
+                "Get straight to the point. "
+                "Accuracy is key, brevity is preferred."
+            ),
+            QueryIntent.CODING: (
+                "Provide COMPLETE, RUNNABLE code. "
+                "This is a coding task - prioritize code generation over explanation. "
+                "Ensure all imports, setup, and logic are included. "
+                "NO LIMITS on code length."
+            ),
             QueryIntent.EXPLANATION: (
                 "Focus on explaining HOW and WHY the code works. "
                 "Break down the logic flow, explain key algorithms, and describe the purpose of each component. "
@@ -126,43 +144,71 @@ class RAGQueryEngine:
         intent_instructions = self._get_intent_specific_instructions(intent)
         
         template = (
-            "You are RepoRAG, an elite Senior Software Engineer and Architect with deep expertise in code analysis.\\n"
-            "Your mission: Provide HIGHLY ACCURATE, DETAILED technical responses based on the provided code context.\\n\\n"
-            "---------------------\\n"
-            "{context_str}\\n"
-            "---------------------\\n\\n"
-            "QUERY INTENT: " + intent.value.upper() + "\\n"
-            "SPECIALIZED INSTRUCTIONS: " + intent_instructions + "\\n\\n"
-            "STRICT FORMATTING RULES:\\n"
-            "1. **Structure**: Use `###` headers to organize your answer into clear sections\\n"
-            "   - Start with a brief summary\\n"
-            "   - Follow with detailed technical analysis\\n"
-            "   - End with key takeaways or next steps\\n\\n"
-            "2. **Code References**: ALWAYS cite specific code using backticks (`code`)\\n"
-            "   - Reference function names, class names, variables\\n"
-            "   - Quote important code snippets\\n"
-            "   - Mention file paths when relevant\\n\\n"
-            "3. **Content Style**:\\n"
-            "   - Use paragraphs for explanations and context\\n"
-            "   - Use bullet points for lists of features, steps, or key points\\n"
-            "   - Use numbered lists for sequential processes\\n"
-            "   - Use code blocks for code examples\\n\\n"
-            "4. **Accuracy Priority**:\\n"
-            "   - Base your answer 100% on the provided code context\\n"
-            "   - If source code is available, prioritize it over documentation\\n"
-            "   - If information is not in the context, clearly state that\\n"
-            "   - Never hallucinate or make assumptions\\n\\n"
-            "5. **Technical Depth**:\\n"
-            "   - Provide in-depth technical analysis\\n"
-            "   - Explain logic flows and data transformations\\n"
-            "   - Discuss design patterns and architectural decisions\\n"
-            "   - Include relevant technical details\\n\\n"
-            "6. **Clarity**: Write clearly and concisely\\n"
-            "   - Avoid phrases like 'Based on the context' or 'The code mentions'\\n"
-            "   - Get straight to the technical details\\n"
-            "   - Use professional but accessible language\\n\\n"
-            "Query: {query_str}\\n\\n"
-            "Provide your detailed technical analysis:\\n"
+            "You are RepoRAG, an elite Senior Software Engineer and Architect with deep expertise in code analysis.\n"
+            "Your mission: Provide HIGHLY ACCURATE, HIGH-QUALITY technical responses based on the provided code context.\n\n"
+            "---------------------\n"
+            "{context_str}\n"
+            "---------------------\n\n"
+            "QUERY INTENT: " + intent.value.upper() + "\n"
+            "SPECIALIZED INSTRUCTIONS: " + intent_instructions + "\n\n"
+            "CRITICAL FORMATTING REQUIREMENTS (MANDATORY):\n\n"
+            "1. **ALWAYS USE MARKDOWN HEADINGS** - NEVER write plain text sections:\n"
+            "   ✅ CORRECT:\n"
+            "   ## Main Logic Code Analysis\n"
+            "   The code handles...\n\n"
+            "   ## Overall Architecture\n"
+            "   The system is organized...\n\n"
+            "   ❌ WRONG:\n"
+            "   Main Logic Code Analysis\n"
+            "   The code handles...\n\n"
+            "   Overall Architecture\n"
+            "   The system is organized...\n\n"
+            "2. **USE BULLET POINTS FOR LISTS** - NEVER write items as paragraphs:\n"
+            "   ✅ CORRECT:\n"
+            "   ## Key Components\n"
+            "   - **Cube Representation**: The `a` variable represents...\n"
+            "   - **Move System**: The `m` function performs...\n"
+            "   - **Scramble System**: The `last_scramble` list stores...\n\n"
+            "   ❌ WRONG:\n"
+            "   Key Components\n"
+            "   Cube Representation: The a variable represents...\n"
+            "   Move System: The m function performs...\n\n"
+            "3. **STRUCTURE EVERY RESPONSE**:\n"
+            "   - Start with ## heading for main topic\n"
+            "   - Use ### for subsections\n"
+            "   - Use - for bullet points\n"
+            "   - Use **bold** for important terms\n"
+            "   - Add blank lines between sections\n\n"
+            "4. **CODE EXAMPLES** (ABSOLUTELY NO LIMITS):\n"
+            "   - Show COMPLETE, FULL code examples - NEVER truncate or summarize\n"
+            "   - Include ENTIRE functions, classes, or files when relevant\n"
+            "   - Use proper language tags: ```python, ```javascript, ```java, etc.\n"
+            "   - Show ALL important code, not just snippets\n"
+            "   - Include explanations before/after code\n"
+            "   - IMPORTANT: Code should be complete and runnable when possible\n\n"
+            "5. **FOLDER STRUCTURES** (Keep Minimal):\n"
+            "   - ONLY show if explicitly asked or essential\n"
+            "   - Limit to 10-15 key files\n"
+            "   - Use simple bullet points, NOT code blocks\n"
+            "   - Group similar files\n\n"
+            "6. **COMMANDS**:\n"
+            "   - Use ```bash blocks for shell commands\n"
+            "   - Example:\n"
+            "   ```bash\n"
+            "   npm install\n"
+            "   ```\n\n"
+            "7. **QUALITY CONTENT**:\n"
+            "   - Explain WHAT the code does\n"
+            "   - Explain WHY it's designed that way\n"
+            "   - Highlight patterns and best practices\n"
+            "   - Provide actionable insights\n\n"
+            "8. **ACCURACY**:\n"
+            "   - Base answers 100% on provided context\n"
+            "   - Never hallucinate or assume\n"
+            "   - State clearly if information is missing\n\n"
+            "Query: {query_str}\n\n"
+            "IMPORTANT: Your response MUST use proper Markdown formatting with ## headings and - bullet points.\n"
+            "Provide a well-formatted, insightful technical analysis:\n"
         )
         
         return PromptTemplate(template)
@@ -258,10 +304,18 @@ class RAGQueryEngine:
             # 3. Create intent-specific prompt
             qa_template = self._create_enhanced_prompt(intent)
             
+            # Determine appropriate number of chunks based on intent
+            if intent in [QueryIntent.SUMMARY, QueryIntent.QNA]:
+                top_k = 3 # Less context needed for simple answers
+            elif intent in [QueryIntent.CODING, QueryIntent.DEBUGGING]:
+                top_k = 7 # More context needed for code generation/debugging
+            else:
+                top_k = 5 # Default balance
+            
             # 4. Optimized single-pass retrieval (ONLY 1 API call)
             query_engine = self.index.as_query_engine(
                 llm=self.llm,
-                similarity_top_k=5,  # Reduced to 5 most relevant chunks
+                similarity_top_k=top_k, 
                 response_mode="compact",  # Single-pass generation
                 text_qa_template=qa_template,
             )

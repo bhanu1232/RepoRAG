@@ -62,8 +62,21 @@ async def health_check():
     """Simple health check endpoint."""
     return {"status": "ok"}
 
+@app.get("/progress")
+async def get_progress():
+    """Get current indexing progress."""
+    if not ingestion_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Ingestion service not available. Check server logs/API keys."
+        )
+    return {
+        "progress": ingestion_service.progress,
+        "stage": ingestion_service.current_stage
+    }
+
 @app.post("/index_repo")
-async def index_repo(request: RepoRequest):
+def index_repo(request: RepoRequest):
     """Clone and index a GitHub repository."""
     if not ingestion_service:
         raise HTTPException(

@@ -8,8 +8,12 @@ from typing import Dict, List, Tuple, Optional
 from enum import Enum
 
 
+
 class QueryIntent(Enum):
     """Types of queries users might ask."""
+    SUMMARY = "summary" # Just a quick summary
+    QNA = "qna" # Simple question and answer
+    CODING = "coding" # Writing or generating code
     EXPLANATION = "explanation"  # How does X work?
     IMPLEMENTATION = "implementation"  # Show me the code for X
     DEBUGGING = "debugging"  # Why is X failing?
@@ -52,6 +56,33 @@ class QueryProcessor:
         
         # Intent detection patterns
         self.intent_patterns = {
+            QueryIntent.SUMMARY: [
+                r'\bsummar(y|ize)\b',
+                r'\bbrief\b',
+                r'\boverview\b',
+                r'\btl;?dr\b',
+                r'\bshort\b',
+                r'\bwhat\s+is\s+this\s+project\b',
+            ],
+            QueryIntent.QNA: [
+                r'\bwhat\s+is\b',
+                r'\bwho\b',
+                r'\bwhen\b',
+                r'\bdoes\s+it\b',
+                r'\bis\s+there\b',
+                r'\bcan\s+it\b',
+                r'\bsimple\b',
+                r'\bquick\b',
+            ],
+            QueryIntent.CODING: [
+                r'\bwrite\b',
+                r'\bgenerate\b',
+                r'\bcreate\b',
+                r'\bimplement\b',
+                r'\brefactor\b',
+                r'\boptimize\b',
+                r'\bcode\s+for\b',
+            ],
             QueryIntent.EXPLANATION: [
                 r'\bhow\s+(does|do|is|are)\b',
                 r'\bwhat\s+(is|are|does)\b',
