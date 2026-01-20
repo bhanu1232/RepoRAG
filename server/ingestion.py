@@ -79,8 +79,13 @@ class RepositoryIngestion:
             self.pinecone_index.delete(delete_all=True)
             print("Pinecone index cleared successfully.")
         except Exception as e:
-            print(f"Error clearing index: {str(e)}")
-            raise Exception(f"Failed to clear index: {str(e)}")
+            # If the index/namespace doesn't exist or is empty, Pinecone might throw a 404
+            # We can safely ignore this as the goal (clearing it) is effectively achieved
+            if "Not Found" in str(e) or "Namespace not found" in str(e):
+                print("Index/Namespace already empty or not found. Skipping clear.")
+            else:
+                print(f"Error clearing index: {str(e)}")
+                raise Exception(f"Failed to clear index: {str(e)}")
     
     def clone_repository(self, repo_url: str) -> str:
         """Clone a GitHub repository to a temporary directory."""
