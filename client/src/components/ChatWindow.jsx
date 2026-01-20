@@ -180,12 +180,9 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                             onChange={(e) => setSelectedModel(e.target.value)}
                             className="px-3 py-1.5 text-sm bg-white dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all cursor-pointer hover:border-gray-400 dark:hover:border-gray-500"
                         >
-                            <option value="groq">Groq (Llama 3.1)</option>
-                            <option value="gemini">Gemini 3.0 Flash</option>
+                            <option value="groq">Groq (Llama 3.1) - fast</option>
+                            <option value="gemini">Gemini 3.0 Flash - smart</option>
                         </select>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-2">
-                            {selectedModel === 'groq' ? '⚡ Fast' : '🧠 Smart'}
-                        </span>
                     </div>
 
                     {/* Input Form */}

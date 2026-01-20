@@ -196,8 +196,23 @@ class RAGQueryEngine:
             "   - Example:\n"
             "   ```bash\n"
             "   npm install\n"
+            "7. **DATA PRESENTATION (TABLES)**:\n"
+            "   - Use Markdown tables for comparing options or listing data\n"
+            "   - Example:\n"
+            "   | Feature | Option A | Option B |\n"
+            "   |---------|----------|----------|\n"
+            "   | Speed   | Fast     | Slow     |\n\n"
+            "8. **VISUALIZATION (MERMAID)**:\n"
+            "   - Use Mermaid dictionaries for flows and architecture\n"
+            "   - Use `mermaid` language tag\n"
+            "   - Example:\n"
+            "   ```mermaid\n"
+            "   graph TD\n"
+            "   A[Start] --> B{Check}\n"
+            "   B -->|Yes| C[Process]\n"
+            "   B -->|No| D[Stop]\n"
             "   ```\n\n"
-            "7. **QUALITY CONTENT**:\n"
+            "9. **QUALITY CONTENT**:\n"
             "   - Explain WHAT the code does\n"
             "   - Explain WHY it's designed that way\n"
             "   - Highlight patterns and best practices\n"
@@ -313,15 +328,31 @@ class RAGQueryEngine:
                 top_k = 5 # Default balance
             
             # 4. Optimized single-pass retrieval (ONLY 1 API call)
-            query_engine = self.index.as_query_engine(
-                llm=self.llm,
-                similarity_top_k=top_k, 
-                response_mode="compact",  # Single-pass generation
-                text_qa_template=qa_template,
-            )
+            # 4. Manual "Retrieve + Generate" to guarantee EXACTLY 1 API call
+            # Get retriever
+            retriever = self.index.as_retriever(similarity_top_k=top_k)
+            nodes = retriever.retrieve(rewritten_query)
             
-            # Execute the query
-            response = query_engine.query(rewritten_query)
+            # Construct Context
+            context_text = "\n\n".join([n.get_content() for n in nodes])
+            
+            # Format Prompt
+            # Note: template expects 'context_str' and 'query_str' (if we follow standard LlamaIndex)
+            # But our prompt string (lines 191) uses {query_str} and we manually format it here
+            final_prompt = qa_template.format(context_str=context_text, query_str=rewritten_query)
+            
+            # Single LLM Call
+            response_text = str(self.llm.complete(final_prompt))
+            
+            # Create a mock response object to match previous structure key expectation or just return text
+            class MockResponse:
+                def __init__(self, text, nodes):
+                    self.response = text
+                    self.source_nodes = nodes
+                def __str__(self):
+                    return self.response
+            
+            response = MockResponse(response_text, nodes)
             
             # 5. Simplified source extraction (no re-ranking to save processing)
             sources = []
