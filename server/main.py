@@ -4,16 +4,12 @@ from pydantic import BaseModel, HttpUrl
 from typing import List, Optional
 import os
 
-# Import our services (to be initialized on startup)
-from ingestion import RepositoryIngestion
-from rag import RAGQueryEngine
-
 app = FastAPI(title="RepoRAG API", version="2.0")
 
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite default port
+    allow_origins=["http://localhost:5173", "https://reporag.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +26,8 @@ def get_ingestion_service():
         try:
             if os.getenv("PINECONE_API_KEY") and os.getenv("GROQ_API_KEY"):
                 print("Initializing Ingestion Service...")
+                # Import here to prevent startup delay
+                from ingestion import RepositoryIngestion
                 ingestion_service = RepositoryIngestion()
                 print("Ingestion Service initialized.")
             else:
@@ -49,6 +47,8 @@ def get_rag_service():
         try:
             if os.getenv("PINECONE_API_KEY") and os.getenv("GROQ_API_KEY"):
                 print("Initializing RAG Service...")
+                # Import here to prevent startup delay
+                from rag import RAGQueryEngine
                 rag_service = RAGQueryEngine()
                 print("RAG Service initialized.")
             else:
