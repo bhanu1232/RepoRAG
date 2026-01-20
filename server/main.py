@@ -70,6 +70,11 @@ async def startup_event():
     """
     print("Application starting up... Services will verify on first use.")
 
+@app.get("/")
+async def root():
+    """Root endpoint for health checks."""
+    return {"status": "running", "service": "RepoRAG API"}
+
 @app.get("/health")
 async def health_check():
     """Simple health check endpoint."""
