@@ -15,6 +15,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Pydantic models for API contracts
+class RepoRequest(BaseModel):
+    repo_url: HttpUrl
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    query: str
+    model: Optional[str] = "groq"  # Default to groq
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: List[dict]
+    confidence: Optional[dict] = None
+    intent: Optional[str] = None
+
 # Global instances
 ingestion_service = None
 rag_service = None
@@ -127,5 +145,5 @@ async def chat(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 100000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
