@@ -42,6 +42,17 @@ class RepositoryIngestion:
         self.pinecone_index = pc.Index(index_name)
         self.vector_store = PineconeVectorStore(pinecone_index=self.pinecone_index)
     
+    def clear_index(self):
+        """Clear all vectors from the Pinecone index."""
+        try:
+            print("Clearing existing data from Pinecone index...")
+            # Delete all vectors from the index
+            self.pinecone_index.delete(delete_all=True)
+            print("Pinecone index cleared successfully.")
+        except Exception as e:
+            print(f"Error clearing index: {str(e)}")
+            raise Exception(f"Failed to clear index: {str(e)}")
+    
     def clone_repository(self, repo_url: str) -> str:
         """Clone a GitHub repository to a temporary directory."""
         temp_dir = tempfile.mkdtemp(prefix="reporag_")
@@ -129,6 +140,9 @@ class RepositoryIngestion:
         repo_path = None
         
         try:
+            # Clear existing data to ensure only the new repository is indexed
+            self.clear_index()
+            
             # Clone the repository
             repo_path = self.clone_repository(repo_url)
             

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Loader2, Bot, ArrowUp, Terminal } from 'lucide-react';
+import { Loader2, Send, Trash2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 
 const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
@@ -9,6 +9,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
     const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+    const chatContainerRef = useRef(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -17,6 +18,8 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+
 
     useEffect(() => {
         if (isRepoIndexed) {
@@ -31,6 +34,12 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
         }
     }, [suggestedPrompt]);
 
+    const clearHistory = () => {
+        if (window.confirm('Clear all messages? This cannot be undone.')) {
+            setMessages([]);
+        }
+    };
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim() || loading) return;
@@ -44,8 +53,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
 
         try {
             const response = await axios.post('http://localhost:8000/chat', {
-                query: userMessage.content,
-                chat_history: messages.filter(m => m.role !== 'system')
+                query: userMessage.content
             });
 
             const aiMessage = {
@@ -69,109 +77,136 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
 
     if (!isRepoIndexed) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center p-4 text-center text-zinc-400 bg-[#09090b]">
-                <div className="bg-zinc-900 p-6 rounded-3xl mb-6 shadow-2xl border border-white/5">
-                    <Bot className="h-12 w-12 text-white" />
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-[#212121]">
+                <div className="animate-fadeIn">
+                    <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center mb-4">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                        Welcome to RepoRAG
+                    </h2>
+                    <p className="max-w-md text-gray-600 dark:text-gray-400 text-sm">
+                        Index a repository to start analyzing your codebase with AI
+                    </p>
                 </div>
-                <h2 className="text-3xl font-heading font-semibold text-white mb-3 tracking-tight">Welcome to RepoRAG</h2>
-                <p className="max-w-md text-zinc-500 text-lg leading-relaxed">
-                    Index a repository to start analyzing your codebase with AI.
-                </p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full bg-[#09090b]">
+        <div className="flex flex-col h-full bg-white dark:bg-[#212121]">
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar w-full relative">
-                {/* Top Blur Overlay - creates depth effect when scrolling */}
-                <div className="sticky top-0 left-0 right-0 h-20 pointer-events-none z-20">
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#09090b] via-[#09090b]/80 to-transparent backdrop-blur-sm"></div>
-                </div>
-
-                <div className="flex flex-col w-full max-w-3xl mx-auto py-10 px-4">
+            <div
+                ref={chatContainerRef}
+                className="flex-1 overflow-y-auto w-full custom-scrollbar"
+                style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(156, 163, 175, 0.3) transparent'
+                }}
+            >
+                <div className="flex flex-col w-full">
                     {messages.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-[50vh] text-zinc-500 animate-fadeIn">
-                            <div className="p-4 rounded-2xl bg-white/5 mb-6">
-                                <Bot className="h-10 w-10 text-white opacity-20" />
+                        <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
+                            <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center mb-4">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
                             </div>
-                            <p className="text-xl font-heading font-medium text-zinc-400">What would you like to build or explain today?</p>
+                            <h3 className="text-xl font-medium text-gray-800 dark:text-gray-100 mb-1">
+                                How can I help you today?
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Ask me anything about your codebase
+                            </p>
                         </div>
                     ) : (
-                        messages.map((msg, idx) => (
-                            <MessageBubble key={idx} message={msg} />
-                        ))
+                        <>
+                            {/* Clear History Button */}
+                            <div className="flex justify-end px-4 pt-4 pb-2">
+                                <button
+                                    onClick={clearHistory}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Clear chat
+                                </button>
+                            </div>
+
+                            {/* Messages */}
+                            {messages.map((msg, idx) => (
+                                <MessageBubble key={idx} message={msg} />
+                            ))}
+                        </>
                     )}
 
+                    {/* Loading Indicator */}
                     {loading && (
-                        <div className="flex w-full mb-6 py-8 animate-fadeIn">
-                            <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center shrink-0 mr-4">
-                                <Bot className="h-5 w-5 text-emerald-500 animate-pulse" />
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="h-1.5 w-1.5 bg-emerald-500/50 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                <div className="h-1.5 w-1.5 bg-emerald-500/50 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                <div className="h-1.5 w-1.5 bg-emerald-500/50 rounded-full animate-bounce"></div>
+                        <div className="w-full bg-gray-50 dark:bg-[#2f2f2f] border-b border-gray-100 dark:border-gray-800">
+                            <div className="max-w-3xl mx-auto px-4 py-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-8 h-8 rounded-sm bg-emerald-600 flex items-center justify-center shrink-0">
+                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex items-center gap-1 pt-2">
+                                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                        <div className="h-2 w-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
-                    <div ref={messagesEndRef} className="h-4" />
+                    <div ref={messagesEndRef} />
                 </div>
             </div>
 
             {/* Input Area */}
-            <div className="w-full bg-transparent pt-2 pb-8 px-4 md:px-6 relative z-10">
+            <div className="w-full border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-[#212121] px-4 py-4">
                 <div className="max-w-3xl mx-auto">
-                    <div className="relative group transition-all duration-300">
-                        {/* Background Glow */}
-                        <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition duration-500"></div>
+                    <form
+                        onSubmit={handleSend}
+                        className="relative flex items-end gap-2 w-full px-4 py-3 bg-white dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-2xl shadow-sm focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors"
+                    >
+                        <textarea
+                            ref={inputRef}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend(e);
+                                }
+                            }}
+                            placeholder="Message RepoRAG..."
+                            rows={1}
+                            className="flex-1 bg-transparent border-0 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-0 focus:outline-none resize-none max-h-32 overflow-y-auto text-base scrollbar-hide"
+                            style={{ minHeight: '24px' }}
+                        />
 
-                        <form
-                            onSubmit={handleSend}
-                            className="relative flex items-end w-full p-2 glass-dark border border-white/10 focus-within:border-emerald-500/30 rounded-2xl shadow-2xl transition-all duration-300"
+                        <button
+                            type="submit"
+                            disabled={!input.trim() || loading}
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-all shrink-0
+                                ${!input.trim() || loading
+                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                    : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
+                                }`}
                         >
-                            <div className="flex h-12 w-12 items-center justify-center shrink-0">
-                                <div className="p-2.5 rounded-xl hover:bg-white/5 cursor-pointer text-zinc-500 transition-colors">
-                                    <Terminal className="h-5 w-5" />
-                                </div>
-                            </div>
+                            {loading ? (
+                                <Loader2 className="animate-spin h-4 w-4" />
+                            ) : (
+                                <Send className="h-4 w-4" />
+                            )}
+                        </button>
+                    </form>
 
-                            <textarea
-                                ref={inputRef}
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleSend(e);
-                                    }
-                                }}
-                                placeholder="Ask anything about the code..."
-                                rows={1}
-                                className="w-full bg-transparent border-0 text-white placeholder-zinc-500 focus:ring-0 resize-none py-3.5 pr-2 max-h-48 overflow-y-auto scrollbar-hide text-[15px] leading-relaxed"
-                                style={{ minHeight: '48px' }}
-                            />
-
-                            <button
-                                type="submit"
-                                disabled={!input.trim() || loading}
-                                className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 shrink-0 mb-1 mr-1
-                  ${!input.trim() || loading
-                                        ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                                        : 'bg-white text-black hover:bg-zinc-200 shadow-xl shadow-white/5 scale-100 active:scale-95'
-                                    }`}
-                            >
-                                {loading ? <Loader2 className="animate-spin h-5 w-5" /> : <ArrowUp className="h-5 w-5 stroke-[2.5px]" />}
-                            </button>
-                        </form>
-                    </div>
-
-                    <div className="flex items-center justify-center gap-4 mt-3 opacity-20 hover:opacity-100 transition-opacity">
-                        <div className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase">
-                            Powered by RepoRAG Engine v5.0
-                        </div>
-                    </div>
+                    <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        RepoRAG can make mistakes. Check important info.
+                    </p>
                 </div>
             </div>
         </div>

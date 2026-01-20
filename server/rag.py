@@ -185,7 +185,7 @@ class RAGQueryEngine:
             "reason": reason
         }
     
-    def query(self, query_text: str, chat_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    def query(self, query_text: str) -> Dict[str, Any]:
         """
         Enhanced query method with multi-stage retrieval and processing.
         """
@@ -201,7 +201,7 @@ class RAGQueryEngine:
                 }
 
             # 2. Process query with our enhanced processor
-            processed = self.query_processor.process(query_text, chat_history)
+            processed = self.query_processor.process(query_text, None)
             intent = processed['intent']
             rewritten_query = processed['rewritten_query']
             
@@ -217,16 +217,8 @@ class RAGQueryEngine:
                 text_qa_template=qa_template,
             )
             
-            # Build context from history
-            history_context = ""
-            if chat_history:
-                for msg in chat_history[-3:]:
-                    history_context += f"{msg.get('role', 'user')}: {msg.get('content', '')}\n"
-            
-            full_query = f"Context from previous conversation:\n{history_context}\n\nCurrent Query: {rewritten_query}" if history_context else rewritten_query
-            
-            # Execute the query
-            response = query_engine.query(full_query)
+            # Execute the query with the rewritten query text
+            response = query_engine.query(rewritten_query)
             
             # 5. Extract and enhance sources
             sources = []

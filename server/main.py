@@ -33,11 +33,12 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     query: str
-    chat_history: Optional[List[ChatMessage]] = []
 
 class ChatResponse(BaseModel):
     answer: str
     sources: List[dict]
+    confidence: Optional[dict] = None
+    intent: Optional[str] = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -85,20 +86,17 @@ async def chat(request: ChatRequest):
             detail="Chat service not available. Check server logs/API keys."
         )
     
-    # Convert Pydantic models to dict for the service
-    history_dicts = [
-        {"role": msg.role, "content": msg.content} 
-        for msg in request.chat_history
-    ]
-    
-    result = rag_service.query(request.query, history_dicts)
+    # Query the RAG service with just the query text
+    result = rag_service.query(request.query)
     
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["answer"])
         
     return {
         "answer": result["answer"],
-        "sources": result["sources"]
+        "sources": result["sources"],
+        "confidence": result.get("confidence"),
+        "intent": result.get("intent")
     }
 
 if __name__ == "__main__":
