@@ -23,39 +23,52 @@ app.add_middleware(
 ingestion_service = None
 rag_service = None
 
-# Pydantic models for API contracts
-class RepoRequest(BaseModel):
-    repo_url: HttpUrl
+def get_ingestion_service():
+    """Lazy load ingestion service."""
+    global ingestion_service
+    if not ingestion_service:
+        try:
+            if os.getenv("PINECONE_API_KEY") and os.getenv("GROQ_API_KEY"):
+                print("Initializing Ingestion Service...")
+                ingestion_service = RepositoryIngestion()
+                print("Ingestion Service initialized.")
+            else:
+                print("WARNING: API keys missing. Ingestion Service not initialized.")
+        except Exception as e:
+            print(f"Error initializing Ingestion Service: {e}")
+            raise HTTPException(status_code=503, detail=f"Service initialization failed: {str(e)}")
+            
+    if not ingestion_service:
+        raise HTTPException(status_code=503, detail="Ingestion service not available. Check API keys.")
+    return ingestion_service
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    query: str
-    model: Optional[str] = "groq"  # Default to groq
-
-class ChatResponse(BaseModel):
-    answer: str
-    sources: List[dict]
-    confidence: Optional[dict] = None
-    intent: Optional[str] = None
+def get_rag_service():
+    """Lazy load RAG service."""
+    global rag_service
+    if not rag_service:
+        try:
+            if os.getenv("PINECONE_API_KEY") and os.getenv("GROQ_API_KEY"):
+                print("Initializing RAG Service...")
+                rag_service = RAGQueryEngine()
+                print("RAG Service initialized.")
+            else:
+                print("WARNING: API keys missing. RAG Service not initialized.")
+        except Exception as e:
+            print(f"Error initializing RAG Service: {e}")
+            raise HTTPException(status_code=503, detail=f"Service initialization failed: {str(e)}")
+            
+    if not rag_service:
+        raise HTTPException(status_code=503, detail="RAG service not available. Check API keys.")
+    return rag_service
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize services on startup."""
-    global ingestion_service, rag_service
-    # Initialize services lazily to avoid crashing if env vars are missing during dev
-    try:
-        if os.getenv("PINECONE_API_KEY") and os.getenv("GROQ_API_KEY"):
-            print("Initializing RAG services...")
-            ingestion_service = RepositoryIngestion()
-            rag_service = RAGQueryEngine()
-            print("RAG services initialized.")
-        else:
-            print("WARNING: API keys missing. RAG services not initialized.")
-    except Exception as e:
-        print(f"Error initializing services: {e}")
+    """
+    FastAPI startup event. 
+    We intentionally DO NOT initialize heavy services here to allow 
+    fast port binding for Render/Heroku.
+    """
+    print("Application starting up... Services will verify on first use.")
 
 @app.get("/health")
 async def health_check():
@@ -65,11 +78,10 @@ async def health_check():
 @app.get("/progress")
 async def get_progress():
     """Get current indexing progress."""
+    # We can check global directly here to avoid triggering init if not needed
     if not ingestion_service:
-        raise HTTPException(
-            status_code=503,
-            detail="Ingestion service not available. Check server logs/API keys."
-        )
+        return {"progress": 0, "stage": "Ready"}
+        
     return {
         "progress": ingestion_service.progress,
         "stage": ingestion_service.current_stage
@@ -78,13 +90,9 @@ async def get_progress():
 @app.post("/index_repo")
 def index_repo(request: RepoRequest):
     """Clone and index a GitHub repository."""
-    if not ingestion_service:
-        raise HTTPException(
-            status_code=503, 
-            detail="Ingestion service not available. Check server logs/API keys."
-        )
+    service = get_ingestion_service()
     
-    result = ingestion_service.index_repository(str(request.repo_url))
+    result = service.index_repository(str(request.repo_url))
     
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])
@@ -94,17 +102,13 @@ def index_repo(request: RepoRequest):
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Query the indexed codebase."""
-    if not rag_service:
-        raise HTTPException(
-            status_code=503, 
-            detail="Chat service not available. Check server logs/API keys."
-        )
+    service = get_rag_service()
     
     # Set the LLM based on user selection
-    rag_service.set_llm(request.model)
+    service.set_llm(request.model)
     
     # Query the RAG service with just the query text
-    result = rag_service.query(request.query)
+    result = service.query(request.query)
     
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["answer"])
