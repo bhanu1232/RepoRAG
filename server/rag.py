@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from llama_index.core import VectorStoreIndex, PromptTemplate
 from llama_index.llms.groq import Groq
 from llama_index.llms.gemini import Gemini
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -49,14 +49,15 @@ class RAGQueryEngine:
         self.llm = self.groq_llm
         self.current_model = "groq"
         
-        # Initialize embedding model (same as ingestion)
-        self.embed_model = HuggingFaceEmbedding(
-            model_name="BAAI/bge-small-en-v1.5"
+        # Initialize embedding model (Switch to Gemini API to save memory)
+        self.embed_model = GeminiEmbedding(
+            model_name="models/text-embedding-004",
+            api_key=os.getenv("GEMINI_API_KEY")
         )
         
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-index-v2")
+        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-gemini")
         
         self.pinecone_index = pc.Index(index_name)
         self.vector_store = PineconeVectorStore(pinecone_index=self.pinecone_index)

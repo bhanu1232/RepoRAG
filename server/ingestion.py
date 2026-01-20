@@ -5,7 +5,7 @@ from typing import List
 from git import Repo
 from llama_index.core import SimpleDirectoryReader, Document
 from llama_index.core.node_parser import TokenTextSplitter
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
 from pinecone import Pinecone, ServerlessSpec
@@ -18,8 +18,10 @@ class RepositoryIngestion:
     """Handles cloning, chunking, and indexing of GitHub repositories."""
     
     def __init__(self):
-        self.embed_model = HuggingFaceEmbedding(
-            model_name="BAAI/bge-small-en-v1.5"
+        # Switch to Gemini Embedding (API-based) to save memory on Render
+        self.embed_model = GeminiEmbedding(
+            model_name="models/text-embedding-004",
+            api_key=os.getenv("GEMINI_API_KEY")
         )
         
         # Progress tracking
@@ -31,13 +33,14 @@ class RepositoryIngestion:
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         
-        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-index-v2")
+        # Use a new index name for Gemini embeddings (different dimension)
+        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-gemini")
         
         # Create index if it doesn't exist
         if index_name not in pc.list_indexes().names():
             pc.create_index(
                 name=index_name,
-                dimension=384,  # bge-small-en-v1.5 dimension
+                dimension=768,  # Gemini text-embedding-004 dimension
                 metric="cosine",
                 spec=ServerlessSpec(
                     cloud="aws",
