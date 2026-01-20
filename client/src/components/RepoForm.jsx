@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { GitBranch, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const RepoForm = ({ onRepoIndexed, isIndexed }) => {
     const [repoUrl, setRepoUrl] = useState('');
     const [loading, setLoading] = useState(false);
@@ -15,7 +17,7 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
             // Poll for progress every 500ms
             interval = setInterval(async () => {
                 try {
-                    const response = await axios.get('http://localhost:8000/progress');
+                    const response = await axios.get(`${API_URL}/progress`);
                     console.log('Progress update:', response.data);
                     setProgress(response.data.progress);
                     setCurrentStage(response.data.stage);
@@ -38,7 +40,7 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
         setStatus(null);
 
         try {
-            const response = await axios.post('http://localhost:8000/index_repo', {
+            const response = await axios.post(`${API_URL}/index_repo`, {
                 repo_url: repoUrl
             });
 
