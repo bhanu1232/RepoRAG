@@ -5,7 +5,7 @@ from typing import List
 from git import Repo
 from llama_index.core import SimpleDirectoryReader, Document
 from llama_index.core.node_parser import TokenTextSplitter
-from llama_index.embeddings.gemini import GeminiEmbedding
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
 from pinecone import Pinecone, ServerlessSpec
@@ -18,10 +18,9 @@ class RepositoryIngestion:
     """Handles cloning, chunking, and indexing of GitHub repositories."""
     
     def __init__(self):
-        # Switch to Gemini Embedding (API-based) to save memory on Render
-        self.embed_model = GeminiEmbedding(
-            model_name="models/text-embedding-004",
-            api_key=os.getenv("GEMINI_API_KEY")
+        # Switch to HuggingFace Embedding (Local, Fast) - 384 dimensions
+        self.embed_model = HuggingFaceEmbedding(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         
         # Progress tracking
@@ -33,8 +32,8 @@ class RepositoryIngestion:
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         
-        # Use a new index name for Gemini embeddings (different dimension)
-        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-gemini")
+        # Use a new index name for optimized embeddings
+        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-optimized")
         
         # Create index if it doesn't exist, or recreate if dimension mismatch
         existing_indexes = pc.list_indexes().names()
@@ -42,8 +41,8 @@ class RepositoryIngestion:
         should_create = True
         if index_name in existing_indexes:
             index_info = pc.describe_index(index_name)
-            if index_info.dimension != 768:
-                print(f"Dimension mismatch! Index has {index_info.dimension}, needed 768. Deleting and recreating...")
+            if index_info.dimension != 384:
+                print(f"Dimension mismatch! Index has {index_info.dimension}, needed 384. Deleting and recreating...")
                 pc.delete_index(index_name)
                 import time
                 time.sleep(5)  # Wait for deletion to propagate
@@ -51,10 +50,10 @@ class RepositoryIngestion:
                 should_create = False
         
         if should_create:
-            print(f"Creating new Pinecone index: {index_name} (dim=768)")
+            print(f"Creating new Pinecone index: {index_name} (dim=384)")
             pc.create_index(
                 name=index_name,
-                dimension=768,  # Gemini text-embedding-004 dimension
+                dimension=384,  # MiniLM dimension
                 metric="cosine",
                 spec=ServerlessSpec(
                     cloud="aws",

@@ -3,43 +3,31 @@ import axios from 'axios';
 import { Loader2, Send, Trash2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import logo from '../assets/logo.png';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
+    // ... state ...
     const [messages, setMessages] = useState([]);
+
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [selectedModel, setSelectedModel] = useState('groq'); // AI model selection
-    const [showClearModal, setShowClearModal] = useState(false); // Clear chat modal
+    const [selectedModel, setSelectedModel] = useState('groq');
+    const [showClearModal, setShowClearModal] = useState(false);
+
+    const chatContainerRef = useRef(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
-    const chatContainerRef = useRef(null);
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-
-
-    useEffect(() => {
-        if (isRepoIndexed) {
-            inputRef.current?.focus();
-        }
-    }, [isRepoIndexed]);
-
-    useEffect(() => {
-        if (suggestedPrompt) {
-            setInput(suggestedPrompt);
-            inputRef.current?.focus();
-        }
-    }, [suggestedPrompt]);
 
     const clearHistory = () => {
         setMessages([]);
         setShowClearModal(false);
     };
+
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages]);
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -53,7 +41,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
         setLoading(true);
 
         try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            console.log("Sending chat request to:", `${API_URL}/chat`);
             const response = await axios.post(`${API_URL}/chat`, {
                 query: userMessage.content,
                 model: selectedModel
@@ -174,18 +162,6 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
             {/* Input Area - Compact */}
             <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#212121]">
                 <div className="max-w-3xl mx-auto px-4 py-3">
-                    {/* Model Selector - Compact */}
-                    <div className="flex items-center justify-center mb-2">
-                        <select
-                            value={selectedModel}
-                            onChange={(e) => setSelectedModel(e.target.value)}
-                            className="px-3 py-1.5 text-sm bg-white dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all cursor-pointer hover:border-gray-400 dark:hover:border-gray-500"
-                        >
-                            <option value="groq">Groq (Llama 3.1) - fast</option>
-                            <option value="gemini">Gemini 3.0 Flash - smart</option>
-                        </select>
-                    </div>
-
                     {/* Input Form */}
                     <form onSubmit={handleSend} className="flex gap-2">
                         <textarea

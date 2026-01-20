@@ -130,13 +130,14 @@ def index_repo(request: RepoRequest):
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Query the indexed codebase."""
-    service = get_rag_service()
+    try:
+        service = get_rag_service()
+    except Exception as e:
+        print(f"RAG Service Init Error: {e}")
+        raise HTTPException(status_code=503, detail=f"AI Service Unavailable: {str(e)}")
     
-    # Set the LLM based on user selection
-    service.set_llm(request.model)
-    
-    # Query the RAG service with just the query text
-    result = service.query(request.query)
+    # Query the RAG service with just the query text (Async)
+    result = await service.aquery(request.query)
     
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["answer"])

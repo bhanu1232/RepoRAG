@@ -2,8 +2,7 @@ import os
 from typing import List, Dict, Any
 from llama_index.core import VectorStoreIndex, PromptTemplate
 from llama_index.llms.groq import Groq
-from llama_index.llms.gemini import Gemini
-from llama_index.embeddings.gemini import GeminiEmbedding
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -24,40 +23,21 @@ class RAGQueryEngine:
         self.cache_ttl = 300  # 5 minutes TTL
         
         # Initialize Groq LLM
-        self.groq_llm = Groq(
+        self.llm = Groq(
             model="llama-3.1-8b-instant",
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.1,
         )
-        
-        # Initialize Gemini LLM (optional - fallback to Groq if fails)
-        try:
-            self.gemini_llm = Gemini(
-                model="gemini-3-flash-preview",
-                api_key=os.getenv("GEMINI_API_KEY"),
-                temperature=0.1,
-            )
-            self.gemini_available = True
-            print("Gemini LLM initialized successfully")
-        except Exception as e:
-            print(f"Warning: Gemini LLM initialization failed: {e}")
-            print("Falling back to Groq only")
-            self.gemini_llm = None
-            self.gemini_available = False
-        
-        # Set default LLM to Groq
-        self.llm = self.groq_llm
         self.current_model = "groq"
         
-        # Initialize embedding model (Switch to Gemini API to save memory)
-        self.embed_model = GeminiEmbedding(
-            model_name="models/text-embedding-004",
-            api_key=os.getenv("GEMINI_API_KEY")
+        # Initialize embedding model (Switch to HuggingFace for speed/local)
+        self.embed_model = HuggingFaceEmbedding(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-gemini")
+        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-optimized")
         
         self.pinecone_index = pc.Index(index_name)
         self.vector_store = PineconeVectorStore(pinecone_index=self.pinecone_index)
@@ -72,19 +52,6 @@ class RAGQueryEngine:
         self.query_processor = QueryProcessor()
         self.hybrid_retriever = HybridRetriever()
     
-    def set_llm(self, model: str):
-        """Switch between Groq and Gemini LLMs."""
-        if model.lower() == "gemini":
-            if self.gemini_available and self.gemini_llm:
-                self.llm = self.gemini_llm
-                self.current_model = "gemini"
-            else:
-                print("Gemini not available, using Groq")
-                self.llm = self.groq_llm
-                self.current_model = "groq"
-        else:
-            self.llm = self.groq_llm
-            self.current_model = "groq"
     
     def _get_intent_specific_instructions(self, intent: QueryIntent) -> str:
         """Get specialized instructions based on query intent."""
@@ -322,11 +289,11 @@ class RAGQueryEngine:
             
             # Determine appropriate number of chunks based on intent
             if intent in [QueryIntent.SUMMARY, QueryIntent.QNA]:
-                top_k = 3 # Less context needed for simple answers
+                top_k = 3
             elif intent in [QueryIntent.CODING, QueryIntent.DEBUGGING]:
-                top_k = 7 # More context needed for code generation/debugging
+                top_k = 5  # Reduced from 7 for speed while maintaining context
             else:
-                top_k = 5 # Default balance
+                top_k = 4  # Reduced from 5
             
             # 4. Optimized single-pass retrieval (ONLY 1 API call)
             # 4. Manual "Retrieve + Generate" to guarantee EXACTLY 1 API call
@@ -395,6 +362,118 @@ class RAGQueryEngine:
             import time
             self.response_cache[cache_key] = (final_response, time.time())
             print(f"Response cached for future queries")
+            
+            return final_response
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "answer": f"Error processing query: {str(e)}",
+                "sources": [],
+                "confidence": {"score": 0.0, "level": "low", "reason": "Error occurred"}
+            }
+
+    async def aquery(self, query_text: str) -> Dict[str, Any]:
+        """
+        Async version of query method to prevent blocking the event loop.
+        """
+        try:
+            # 0. Check cache first
+            import time
+            cache_key = f"{query_text}_{self.current_model}"
+            if cache_key in self.response_cache:
+                cached_response, timestamp = self.response_cache[cache_key]
+                if time.time() - timestamp < self.cache_ttl:
+                    print(f"Cache hit! Returning cached response")
+                    return cached_response
+                else:
+                    del self.response_cache[cache_key]
+            
+            # 1. Handle greetings (Sync is fine here, it's fast)
+            greetings = ["hi", "hello", "hey", "hallo", "greetings"]
+            if query_text.lower().strip().rstrip('!?.') in greetings:
+                return {
+                    "success": True,
+                    "answer": "Hello! I'm RepoRAG, your advanced code analysis assistant. I've indexed your repository and I'm ready to provide detailed, accurate insights about the codebase. What would you like to explore?",
+                    "sources": [],
+                    "confidence": {"score": 1.0, "level": "high", "reason": "Greeting response"}
+                }
+
+            # 2. Process query (Sync but fast regex)
+            processed = self.query_processor.process(query_text, None)
+            intent = processed['intent']
+            rewritten_query = processed['rewritten_query']
+            
+            # 3. Create prompt
+            qa_template = self._create_enhanced_prompt(intent)
+            
+            # Determine top_k
+            if intent in [QueryIntent.SUMMARY, QueryIntent.QNA]:
+                top_k = 3
+            elif intent in [QueryIntent.CODING, QueryIntent.DEBUGGING]:
+                top_k = 7
+            else:
+                top_k = 5
+            
+            # 4. Async Retrieval (Run sync retrieval in thread pool)
+            import asyncio
+            retriever = self.index.as_retriever(similarity_top_k=top_k)
+            nodes = await asyncio.to_thread(retriever.retrieve, rewritten_query)
+            
+            # Construct Context
+            context_text = "\n\n".join([n.get_content() for n in nodes])
+            final_prompt = qa_template.format(context_str=context_text, query_str=rewritten_query)
+            
+            # 5. Async LLM Call
+            response_obj = await self.llm.acomplete(final_prompt)
+            response_text = str(response_obj)
+            
+            # Mock response structure for source extraction
+            class MockResponse:
+                def __init__(self, text, nodes):
+                    self.response = text
+                    self.source_nodes = nodes
+                def __str__(self):
+                    return self.response
+            
+            response = MockResponse(response_text, nodes)
+            
+            # 6. Source Extraction
+            sources = []
+            if hasattr(response, 'source_nodes'):
+                for node in response.source_nodes[:5]:
+                    file_path = node.metadata.get('file_path', 'Unknown')
+                    start_line = node.metadata.get('start_line', '')
+                    end_line = node.metadata.get('end_line', '')
+                    score = node.score if hasattr(node, 'score') else None
+                    
+                    if start_line and end_line:
+                        lines = f"{start_line}-{end_line}"
+                    elif start_line:
+                        lines = str(start_line)
+                    else:
+                        lines = "N/A"
+                    
+                    sources.append({
+                        "file": file_path,
+                        "lines": lines,
+                        "score": round(float(score), 3) if score else None,
+                        "category": node.metadata.get('file_category', 'unknown')
+                    })
+            
+            # 7. Confidence & Final Response
+            confidence = self._calculate_confidence(sources, query_text, str(response))
+            
+            final_response = {
+                "success": True,
+                "answer": str(response),
+                "sources": sources,
+                "confidence": confidence,
+                "intent": intent.value
+            }
+            
+            # Cache
+            self.response_cache[cache_key] = (final_response, time.time())
             
             return final_response
             
