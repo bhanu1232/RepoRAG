@@ -9,7 +9,12 @@ app = FastAPI(title="RepoRAG API", version="2.0")
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://reporag.vercel.app"],
+    allow_origins=[
+        "http://localhost:5173", 
+        "https://reporag.vercel.app", 
+        "https://repo-rag.vercel.app",
+        "https://repo-rag.vercel.app/"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
