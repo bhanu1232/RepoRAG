@@ -33,6 +33,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     query: str
+    model: Optional[str] = "groq"  # Default to groq
 
 class ChatResponse(BaseModel):
     answer: str
@@ -85,6 +86,9 @@ async def chat(request: ChatRequest):
             status_code=503, 
             detail="Chat service not available. Check server logs/API keys."
         )
+    
+    # Set the LLM based on user selection
+    rag_service.set_llm(request.model)
     
     # Query the RAG service with just the query text
     result = rag_service.query(request.query)

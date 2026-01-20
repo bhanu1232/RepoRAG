@@ -2,6 +2,7 @@ import os
 from typing import List, Dict, Any
 from llama_index.core import VectorStoreIndex, PromptTemplate
 from llama_index.llms.groq import Groq
+from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone
@@ -18,12 +19,35 @@ class RAGQueryEngine:
     """Enhanced RAG engine with advanced query processing and hybrid retrieval."""
     
     def __init__(self):
-        # Initialize Groq LLM with higher context
-        self.llm = Groq(
+        # Initialize response cache to reduce API calls
+        self.response_cache = {}
+        self.cache_ttl = 300  # 5 minutes TTL
+        
+        # Initialize Groq LLM
+        self.groq_llm = Groq(
             model="llama-3.1-8b-instant",
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=0.1,
         )
+        
+        # Initialize Gemini LLM (optional - fallback to Groq if fails)
+        try:
+            self.gemini_llm = Gemini(
+                model="gemini-3-flash-preview",
+                api_key=os.getenv("GEMINI_API_KEY"),
+                temperature=0.1,
+            )
+            self.gemini_available = True
+            print("Gemini LLM initialized successfully")
+        except Exception as e:
+            print(f"Warning: Gemini LLM initialization failed: {e}")
+            print("Falling back to Groq only")
+            self.gemini_llm = None
+            self.gemini_available = False
+        
+        # Set default LLM to Groq
+        self.llm = self.groq_llm
+        self.current_model = "groq"
         
         # Initialize embedding model (same as ingestion)
         self.embed_model = HuggingFaceEmbedding(
@@ -46,6 +70,20 @@ class RAGQueryEngine:
         # Initialize our new components
         self.query_processor = QueryProcessor()
         self.hybrid_retriever = HybridRetriever()
+    
+    def set_llm(self, model: str):
+        """Switch between Groq and Gemini LLMs."""
+        if model.lower() == "gemini":
+            if self.gemini_available and self.gemini_llm:
+                self.llm = self.gemini_llm
+                self.current_model = "gemini"
+            else:
+                print("Gemini not available, using Groq")
+                self.llm = self.groq_llm
+                self.current_model = "groq"
+        else:
+            self.llm = self.groq_llm
+            self.current_model = "groq"
     
     def _get_intent_specific_instructions(self, intent: QueryIntent) -> str:
         """Get specialized instructions based on query intent."""
@@ -187,9 +225,21 @@ class RAGQueryEngine:
     
     def query(self, query_text: str) -> Dict[str, Any]:
         """
-        Enhanced query method with multi-stage retrieval and processing.
+        Optimized query method with caching and single-pass generation.
         """
         try:
+            # 0. Check cache first to avoid API calls
+            import time
+            cache_key = f"{query_text}_{self.current_model}"
+            if cache_key in self.response_cache:
+                cached_response, timestamp = self.response_cache[cache_key]
+                if time.time() - timestamp < self.cache_ttl:
+                    print(f"Cache hit! Returning cached response (saved API call)")
+                    return cached_response
+                else:
+                    # Cache expired, remove it
+                    del self.response_cache[cache_key]
+            
             # 1. Handle simple greetings without RAG
             greetings = ["hi", "hello", "hey", "hallo", "greetings"]
             if query_text.lower().strip().rstrip('!?.') in greetings:
@@ -208,55 +258,26 @@ class RAGQueryEngine:
             # 3. Create intent-specific prompt
             qa_template = self._create_enhanced_prompt(intent)
             
-            # 4. Multi-stage retrieval
-            # Stage 1: Broad semantic retrieval
+            # 4. Optimized single-pass retrieval (ONLY 1 API call)
             query_engine = self.index.as_query_engine(
                 llm=self.llm,
-                similarity_top_k=25,  # Retrieve more initially
-                response_mode="tree_summarize",
+                similarity_top_k=5,  # Reduced to 5 most relevant chunks
+                response_mode="compact",  # Single-pass generation
                 text_qa_template=qa_template,
             )
             
-            # Execute the query with the rewritten query text
+            # Execute the query
             response = query_engine.query(rewritten_query)
             
-            # 5. Extract and enhance sources
+            # 5. Simplified source extraction (no re-ranking to save processing)
             sources = []
             if hasattr(response, 'source_nodes'):
-                # Stage 2: Re-rank sources using hybrid retriever
-                semantic_results = [(node, node.score if hasattr(node, 'score') else 0.5) 
-                                   for node in response.source_nodes]
-                
-                # Perform keyword search on the same nodes
-                keyword_results = self.hybrid_retriever.keyword_search(
-                    query_text, 
-                    response.source_nodes, 
-                    top_k=15
-                )
-                
-                # Merge using RRF
-                merged_results = self.hybrid_retriever.reciprocal_rank_fusion(
-                    semantic_results,
-                    keyword_results,
-                    semantic_weight=0.7,
-                    keyword_weight=0.3
-                )
-                
-                # Re-rank based on intent
-                reranked_results = self.hybrid_retriever.rerank_by_relevance(
-                    merged_results,
-                    query_text,
-                    intent.value
-                )
-                
-                # Take top results
-                top_nodes = [node for node, score in reranked_results[:12]]
-                
-                # Build sources list with scores
-                for node, score in reranked_results[:12]:
+                # Direct extraction without re-ranking
+                for node in response.source_nodes[:5]:  # Take top 5 only
                     file_path = node.metadata.get('file_path', 'Unknown')
                     start_line = node.metadata.get('start_line', '')
                     end_line = node.metadata.get('end_line', '')
+                    score = node.score if hasattr(node, 'score') else None
                     
                     if start_line and end_line:
                         lines = f"{start_line}-{end_line}"
@@ -275,13 +296,21 @@ class RAGQueryEngine:
             # 6. Calculate confidence
             confidence = self._calculate_confidence(sources, query_text, str(response))
             
-            return {
+            # Build final response
+            final_response = {
                 "success": True,
                 "answer": str(response),
                 "sources": sources,
                 "confidence": confidence,
                 "intent": intent.value
             }
+            
+            # 7. Cache the response for future use
+            import time
+            self.response_cache[cache_key] = (final_response, time.time())
+            print(f"Response cached for future queries")
+            
+            return final_response
             
         except Exception as e:
             import traceback

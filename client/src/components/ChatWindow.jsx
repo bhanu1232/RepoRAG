@@ -7,6 +7,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [selectedModel, setSelectedModel] = useState('groq'); // AI model selection
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const chatContainerRef = useRef(null);
@@ -53,7 +54,8 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
 
         try {
             const response = await axios.post('http://localhost:8000/chat', {
-                query: userMessage.content
+                query: userMessage.content,
+                model: selectedModel
             });
 
             const aiMessage = {
@@ -167,6 +169,25 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt }) => {
             {/* Input Area */}
             <div className="w-full border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-[#212121] px-4 py-4">
                 <div className="max-w-3xl mx-auto">
+                    {/* Model Selector */}
+                    <div className="mb-3 flex items-center gap-2">
+                        <label htmlFor="model-select" className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                            AI Model:
+                        </label>
+                        <select
+                            id="model-select"
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="px-3 py-1.5 text-sm bg-white dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all cursor-pointer hover:border-gray-400 dark:hover:border-gray-500"
+                        >
+                            <option value="groq">Groq (Llama 3.1)</option>
+                            <option value="gemini">Gemini 3.0 Flash</option>
+                        </select>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                            {selectedModel === 'groq' ? '⚡ Fast' : '🧠 Smart'}
+                        </span>
+                    </div>
+
                     <form
                         onSubmit={handleSend}
                         className="relative flex items-end gap-2 w-full px-4 py-3 bg-white dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-2xl shadow-sm focus-within:border-gray-400 dark:focus-within:border-gray-500 transition-colors"
