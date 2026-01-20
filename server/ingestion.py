@@ -36,8 +36,22 @@ class RepositoryIngestion:
         # Use a new index name for Gemini embeddings (different dimension)
         index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-gemini")
         
-        # Create index if it doesn't exist
-        if index_name not in pc.list_indexes().names():
+        # Create index if it doesn't exist, or recreate if dimension mismatch
+        existing_indexes = pc.list_indexes().names()
+        
+        should_create = True
+        if index_name in existing_indexes:
+            index_info = pc.describe_index(index_name)
+            if index_info.dimension != 768:
+                print(f"Dimension mismatch! Index has {index_info.dimension}, needed 768. Deleting and recreating...")
+                pc.delete_index(index_name)
+                import time
+                time.sleep(5)  # Wait for deletion to propagate
+            else:
+                should_create = False
+        
+        if should_create:
+            print(f"Creating new Pinecone index: {index_name} (dim=768)")
             pc.create_index(
                 name=index_name,
                 dimension=768,  # Gemini text-embedding-004 dimension

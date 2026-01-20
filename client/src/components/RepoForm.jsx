@@ -24,7 +24,7 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
                 } catch (error) {
                     console.error('Error fetching progress:', error);
                 }
-            }, 500);
+            }, 2000);
         }
 
         return () => {
