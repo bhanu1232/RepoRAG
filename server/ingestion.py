@@ -10,6 +10,7 @@ from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
 from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
+import gc
 
 load_dotenv()
 
@@ -197,19 +198,46 @@ class RepositoryIngestion:
             self.update_progress("Files processed", 60)
             
             # Stage 4: Create embeddings and index (60-100%)
-            self.update_progress("Creating embeddings", 65)
+            self.update_progress("Initializing index", 65)
+            
             storage_context = StorageContext.from_defaults(
                 vector_store=self.vector_store
             )
             
-            self.update_progress("Indexing vectors", 75)
-            # Create the index
-            index = VectorStoreIndex(
-                nodes=nodes,
+            # Initialize index from vector store (empty at this point)
+            index = VectorStoreIndex.from_vector_store(
+                vector_store=self.vector_store,
                 storage_context=storage_context,
                 embed_model=self.embed_model,
-                show_progress=True,
             )
+            
+            # Batch process nodes to save memory
+            batch_size = 20
+            total_nodes = len(nodes)
+            total_batches = (total_nodes + batch_size - 1) // batch_size
+            
+            print(f"Indexing {total_nodes} nodes in {total_batches} batches...")
+            
+            for i in range(0, total_nodes, batch_size):
+                batch_nodes = nodes[i : i + batch_size]
+                current_batch = (i // batch_size) + 1
+                
+                # Calculate progress (65% to 95%)
+                progress_percent = 65 + int(30 * (i / total_nodes))
+                self.update_progress(f"Indexing batch {current_batch}/{total_batches}", progress_percent)
+                
+                try:
+                    index.insert_nodes(batch_nodes)
+                except Exception as e:
+                    print(f"Error indexing batch {current_batch}: {e}")
+                    # Try to continue with next batch? 
+                    # For now, let's re-raise as it might be critical
+                    raise e
+                
+                # Force garbage collection
+                gc.collect()
+            
+            self.update_progress("Finalizing index", 95)
             
             self.update_progress("Complete", 100)
             
