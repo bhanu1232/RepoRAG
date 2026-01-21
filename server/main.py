@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional
@@ -50,6 +50,14 @@ class ChatResponse(BaseModel):
 ingestion_service = None
 rag_service = None
 shared_embed_model = None
+
+# Indexing status tracking
+indexing_status = {
+    "in_progress": False,
+    "repo_url": None,
+    "error": None,
+    "result": None
+}
 
 def get_shared_embedding():
     """Lazy load shared embedding model."""
@@ -109,16 +117,12 @@ def get_rag_service():
 async def startup_event():
     """
     FastAPI startup event. 
-    Initialize services immediately to ensure they are ready for user interaction.
+    Keep startup lightweight for Railway deployment.
+    Services will be lazily initialized on first use.
     """
-    print("Application starting up... Initializing services...")
-    try:
-        # Eagerly initialize services
-        get_ingestion_service()
-        get_rag_service()
-        print("All services initialized successfully.")
-    except Exception as e:
-        print(f"Warning: Service initialization incomplete: {e}")
+    print("Application starting up...")
+    print("Services will be initialized on first use (lazy loading)")
+    print("Startup complete - ready to accept requests")
 
 @app.get("/")
 async def root():
@@ -133,32 +137,107 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Simple health check endpoint."""
-    return {"status": "ok"}
+    """Detailed health check endpoint for Railway."""
+    env_vars_present = {
+        "PINECONE_API_KEY": bool(os.getenv("PINECONE_API_KEY")),
+        "GROQ_API_KEY": bool(os.getenv("GROQ_API_KEY")),
+    }
+    
+    return {
+        "status": "healthy",
+        "service": "RepoRAG API",
+        "env_configured": all(env_vars_present.values()),
+        "env_details": env_vars_present,
+        "services": {
+            "ingestion": "initialized" if ingestion_service else "not_loaded",
+            "rag": "initialized" if rag_service else "not_loaded"
+        }
+    }
 
 @app.get("/progress")
 async def get_progress():
-    """Get current indexing progress."""
-    # We can check global directly here to avoid triggering init if not needed
-    if not ingestion_service:
-        return {"progress": 0, "stage": "Ready"}
+    """Get current indexing progress and status."""
+    # Check global indexing status first
+    if indexing_status["in_progress"]:
+        progress_data = {
+            "progress": ingestion_service.progress if ingestion_service else 0,
+            "stage": ingestion_service.current_stage if ingestion_service else "Initializing",
+            "in_progress": True,
+            "repo_url": indexing_status["repo_url"]
+        }
+        if indexing_status["error"]:
+            progress_data["error"] = indexing_status["error"]
+        return progress_data
+    
+    # If indexing completed, return result
+    if indexing_status["result"]:
+        return {
+            "progress": 100,
+            "stage": "Complete",
+            "in_progress": False,
+            "result": indexing_status["result"]
+        }
+    
+    # Default: ready state
+    return {"progress": 0, "stage": "Ready", "in_progress": False}
+
+def run_indexing_task(repo_url: str):
+    """Background task to run repository indexing."""
+    global indexing_status
+    try:
+        print(f"Background indexing started for: {repo_url}")
+        service = get_ingestion_service()
+        print("Ingestion service initialized, starting indexing...")
         
-    return {
-        "progress": ingestion_service.progress,
-        "stage": ingestion_service.current_stage
-    }
+        result = service.index_repository(repo_url)
+        
+        if result["success"]:
+            print(f"Indexing completed successfully: {result}")
+            indexing_status["result"] = result
+            indexing_status["error"] = None
+        else:
+            print(f"Indexing failed: {result['message']}")
+            indexing_status["error"] = result["message"]
+            indexing_status["result"] = None
+            
+    except Exception as e:
+        print(f"Unexpected error in background indexing: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        indexing_status["error"] = str(e)
+        indexing_status["result"] = None
+    finally:
+        indexing_status["in_progress"] = False
+        print("Background indexing task completed")
 
 @app.post("/index_repo")
-def index_repo(request: RepoRequest):
-    """Clone and index a GitHub repository."""
-    service = get_ingestion_service()
+async def index_repo(request: RepoRequest, background_tasks: BackgroundTasks):
+    """Start indexing a GitHub repository in the background."""
+    global indexing_status
     
-    result = service.index_repository(str(request.repo_url))
+    # Check if indexing is already in progress
+    if indexing_status["in_progress"]:
+        raise HTTPException(
+            status_code=409, 
+            detail=f"Indexing already in progress for: {indexing_status['repo_url']}"
+        )
     
-    if not result["success"]:
-        raise HTTPException(status_code=500, detail=result["message"])
-        
-    return result
+    # Reset status
+    indexing_status = {
+        "in_progress": True,
+        "repo_url": str(request.repo_url),
+        "error": None,
+        "result": None
+    }
+    
+    # Add indexing task to background
+    background_tasks.add_task(run_indexing_task, str(request.repo_url))
+    
+    return {
+        "message": "Indexing started in background",
+        "repo_url": str(request.repo_url),
+        "status": "Check /progress endpoint for updates"
+    }
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
