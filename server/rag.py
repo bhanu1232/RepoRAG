@@ -2,7 +2,7 @@ import os
 from typing import List, Dict, Any
 from llama_index.core import VectorStoreIndex, PromptTemplate
 from llama_index.llms.groq import Groq
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -30,9 +30,9 @@ class RAGQueryEngine:
         )
         self.current_model = "groq"
         
-        # Initialize embedding model (Switch to HuggingFace for speed/local)
-        self.embed_model = HuggingFaceEmbedding(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        # Initialize FastEmbed (ONNX, lightweight)
+        self.embed_model = FastEmbedEmbedding(
+            model_name="BAAI/bge-small-en-v1.5"
         )
         
         # Initialize Pinecone
@@ -296,10 +296,50 @@ class RAGQueryEngine:
                 top_k = 4  # Reduced from 5
             
             # 4. Optimized single-pass retrieval (ONLY 1 API call)
-            # 4. Manual "Retrieve + Generate" to guarantee EXACTLY 1 API call
-            # Get retriever
-            retriever = self.index.as_retriever(similarity_top_k=top_k)
-            nodes = retriever.retrieve(rewritten_query)
+            # A. Semantic Search (Vector)
+            retriever = self.index.as_retriever(similarity_top_k=top_k * 2) # Get more candidates for fusion
+            semantic_nodes = retriever.retrieve(rewritten_query)
+            
+            # B. Keyword Search (BM25-like)
+            # We need to access the underlying docstore or nodes for keyword search
+            # Since Pinecone doesn't support direct keyword search easily without metadata,
+            # we'll use the results from semantic search + cache or just rely on semantic for now if full store isn't available.
+            # However, to be truly hybrid, we should ideally query Pinecone with hybrid (sparse-dense) if configured.
+            # Given the constraints and existing code, we will iterate on the *retrieved* semantic nodes and potentially
+            # some expanded context if we had a full local store, but here we will focus on Reranking the semantic results first.
+            
+            # actually, let's just stick to the plan: "Enhance ... with advanced techniques"
+            # We will use the HybridRetriever to Rerank the semantic nodes we got.
+            # AND if we can, we should try to fetch a bit more.
+            
+            # Let's use the local file text for keyword search if we considered them "loaded", 
+            # but we only have vector store index. 
+            # So we will proceed with: Retrieve -> Rerank (using HybridRetriever logic).
+            
+            # Extract nodes from NodeWithScore objects
+            semantic_node_tuples = [(n.node, n.score) for n in semantic_nodes]
+            
+            # In a true hybrid setup with a local docstore, we would do a separate keyword search over all docs.
+            # Since we are serverless/pinecone only, we can't easily iterate all docs for BM25 without fetching them.
+            # So we will use the "Rerank" capability of our HybridRetriever to refine the Semantic results.
+            
+            # C. Reranking
+            reranked_tuples = self.hybrid_retriever.rerank_by_relevance(
+                semantic_node_tuples, 
+                query_text, 
+                intent.value
+            )
+            
+            # Take top K after reranking
+            final_top_k_tuples = reranked_tuples[:top_k]
+            
+            # Reconstruct NodeWithScore objects
+            from llama_index.core.schema import NodeWithScore
+            nodes = [NodeWithScore(node=t[0], score=t[1]) for t in final_top_k_tuples]
+            
+            # D. Context Expansion (Optional - if we had the full store nearby, but we can try simple expansion if metadata allows)
+            # nodes = self.hybrid_retriever.expand_context(nodes, ...) 
+            # (Skipping expansion for now to save memory/complexity as we might not have all chunks loaded)
             
             # Construct Context
             context_text = "\n\n".join([n.get_content() for n in nodes])
@@ -417,8 +457,27 @@ class RAGQueryEngine:
             
             # 4. Async Retrieval (Run sync retrieval in thread pool)
             import asyncio
-            retriever = self.index.as_retriever(similarity_top_k=top_k)
+            retriever = self.index.as_retriever(similarity_top_k=top_k * 2)
             nodes = await asyncio.to_thread(retriever.retrieve, rewritten_query)
+            
+            # --- START HYBRID RERANKING ---
+            # Extract nodes
+            semantic_node_tuples = [(n.node, n.score) for n in nodes]
+            
+            # Rerank
+            reranked_tuples = self.hybrid_retriever.rerank_by_relevance(
+                semantic_node_tuples, 
+                query_text, 
+                intent.value
+            )
+            
+            # Take top K
+            final_top_k_tuples = reranked_tuples[:top_k]
+            
+            # Reconstruct
+            from llama_index.core.schema import NodeWithScore
+            nodes = [NodeWithScore(node=t[0], score=t[1]) for t in final_top_k_tuples]
+            # --- END HYBRID RERANKING ---
             
             # Construct Context
             context_text = "\n\n".join([n.get_content() for n in nodes])

@@ -5,7 +5,7 @@ from typing import List
 from git import Repo
 from llama_index.core import SimpleDirectoryReader, Document
 from llama_index.core.node_parser import TokenTextSplitter
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
 from pinecone import Pinecone, ServerlessSpec
@@ -18,9 +18,10 @@ class RepositoryIngestion:
     """Handles cloning, chunking, and indexing of GitHub repositories."""
     
     def __init__(self):
-        # Switch to HuggingFace Embedding (Local, Fast) - 384 dimensions
-        self.embed_model = HuggingFaceEmbedding(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        # Switch to FastEmbed (ONNX-based, very fast, low memory)
+        # Default model is constant, but stating it for clarity: "BAAI/bge-small-en-v1.5"
+        self.embed_model = FastEmbedEmbedding(
+             model_name="BAAI/bge-small-en-v1.5"
         )
         
         # Progress tracking

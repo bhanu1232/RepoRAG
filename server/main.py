@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="RepoRAG API", version="2.0")
 
@@ -151,5 +154,5 @@ async def chat(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 100000))
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
