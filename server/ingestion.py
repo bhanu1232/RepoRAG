@@ -211,8 +211,8 @@ class RepositoryIngestion:
                 embed_model=self.embed_model,
             )
             
-            # Batch process nodes to save memory
-            batch_size = 20
+            # Batch process nodes to save memory - VERY SMALL batches for Railway
+            batch_size = 3  # Reduced from 20 to prevent OOM
             total_nodes = len(nodes)
             total_batches = (total_nodes + batch_size - 1) // batch_size
             
