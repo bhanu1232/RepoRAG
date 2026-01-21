@@ -211,31 +211,31 @@ class RepositoryIngestion:
                 embed_model=self.embed_model,
             )
             
-            # Batch process nodes to save memory
-            batch_size = 20
+            # Process nodes ONE AT A TIME for Railway's extreme memory constraints
+            batch_size = 1  # Absolute minimum to prevent OOM on Railway
             total_nodes = len(nodes)
-            total_batches = (total_nodes + batch_size - 1) // batch_size
             
-            print(f"Indexing {total_nodes} nodes in {total_batches} batches...")
+            print(f"Indexing {total_nodes} nodes individually (Railway memory optimization)...")
             
             for i in range(0, total_nodes, batch_size):
                 batch_nodes = nodes[i : i + batch_size]
-                current_batch = (i // batch_size) + 1
+                current_node = i + 1
                 
                 # Calculate progress (65% to 95%)
                 progress_percent = 65 + int(30 * (i / total_nodes))
-                self.update_progress(f"Indexing batch {current_batch}/{total_batches}", progress_percent)
+                self.update_progress(f"Indexing node {current_node}/{total_nodes}", progress_percent)
                 
                 try:
                     index.insert_nodes(batch_nodes)
                 except Exception as e:
-                    print(f"Error indexing batch {current_batch}: {e}")
-                    # Try to continue with next batch? 
-                    # For now, let's re-raise as it might be critical
-                    raise e
+                    print(f"Error indexing node {current_node}: {e}")
+                    # Log but continue with next node to salvage what we can
+                    print(f"Skipping node {current_node} and continuing...")
+                    continue
                 
-                # Force garbage collection
-                gc.collect()
+                # Aggressive garbage collection after each node
+                if i % 5 == 0:  # Every 5 nodes
+                    gc.collect()
             
             self.update_progress("Finalizing index", 95)
             

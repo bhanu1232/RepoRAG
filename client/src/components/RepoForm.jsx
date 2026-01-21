@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { GitBranch, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -11,26 +11,7 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
     const [progress, setProgress] = useState(0);
     const [currentStage, setCurrentStage] = useState('');
 
-    useEffect(() => {
-        let interval;
-        if (loading) {
-            // Poll for progress every 500ms
-            interval = setInterval(async () => {
-                try {
-                    const response = await axios.get(`${API_URL}/progress`);
-                    console.log('Progress update:', response.data);
-                    setProgress(response.data.progress);
-                    setCurrentStage(response.data.stage);
-                } catch (error) {
-                    console.error('Error fetching progress:', error);
-                }
-            }, 2000);
-        }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [loading]);
+    // Polling is now handled in handleSubmit function
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -38,17 +19,69 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
 
         setLoading(true);
         setStatus(null);
+        setProgress(0);
+        setCurrentStage('Starting...');
 
         try {
+            // Start indexing (returns immediately)
             const response = await axios.post(`${API_URL}/index_repo`, {
                 repo_url: repoUrl
             });
 
-            setStatus('success');
-            onRepoIndexed(repoUrl);
+            console.log('Indexing started:', response.data);
+
+            // Now poll for completion
+            const pollInterval = setInterval(async () => {
+                try {
+                    const progressResponse = await axios.get(`${API_URL}/progress`);
+                    const progressData = progressResponse.data;
+
+                    console.log('Progress update:', progressData);
+                    setProgress(progressData.progress);
+                    setCurrentStage(progressData.stage);
+
+                    // Check if indexing is complete
+                    if (!progressData.in_progress && progressData.result) {
+                        clearInterval(pollInterval);
+
+                        if (progressData.result.success) {
+                            setStatus('success');
+                            setProgress(100);
+                            setCurrentStage('Complete');
+                            onRepoIndexed(repoUrl);
+                            setLoading(false);
+                        } else {
+                            setStatus('error');
+                            setCurrentStage(progressData.result.message || 'Failed');
+                            setLoading(false);
+                        }
+                    } else if (progressData.error) {
+                        // Handle errors during indexing
+                        clearInterval(pollInterval);
+                        setStatus('error');
+                        setCurrentStage(progressData.error);
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Error polling progress:', error);
+                    // Don't stop polling on temporary errors
+                }
+            }, 2000); // Poll every 2 seconds
+
+            // Safety timeout: stop polling after 10 minutes
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                if (loading) {
+                    setStatus('error');
+                    setCurrentStage('Timeout - indexing took too long');
+                    setLoading(false);
+                }
+            }, 600000); // 10 minutes
+
         } catch (error) {
+            console.error('Error starting indexing:', error);
             setStatus('error');
-        } finally {
+            setCurrentStage(error.response?.data?.detail || 'Failed to start indexing');
             setLoading(false);
         }
     };
