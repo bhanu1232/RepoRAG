@@ -17,7 +17,7 @@ load_dotenv()
 class RAGQueryEngine:
     """Enhanced RAG engine with advanced query processing and hybrid retrieval."""
     
-    def __init__(self):
+    def __init__(self, embed_model=None):
         # Initialize response cache to reduce API calls
         self.response_cache = {}
         self.cache_ttl = 300  # 5 minutes TTL
@@ -31,9 +31,12 @@ class RAGQueryEngine:
         self.current_model = "groq"
         
         # Initialize FastEmbed (ONNX, lightweight)
-        self.embed_model = FastEmbedEmbedding(
-            model_name="BAAI/bge-small-en-v1.5"
-        )
+        if embed_model:
+            self.embed_model = embed_model
+        else:
+            self.embed_model = FastEmbedEmbedding(
+                model_name="BAAI/bge-small-en-v1.5"
+            )
         
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))

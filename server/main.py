@@ -7,6 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Optimization for Render (CPU-only, low memory)
+os.environ["ONNXRUNTIME_EXECUTION_PROVIDERS"] = "CPUExecutionProvider"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+
 app = FastAPI(title="RepoRAG API", version="2.0")
 
 # CORS middleware for React frontend
@@ -44,6 +49,17 @@ class ChatResponse(BaseModel):
 # Global instances
 ingestion_service = None
 rag_service = None
+shared_embed_model = None
+
+def get_shared_embedding():
+    """Lazy load shared embedding model."""
+    global shared_embed_model
+    if not shared_embed_model:
+        print("Initializing Shared Embedding Model...")
+        from llama_index.embeddings.fastembed import FastEmbedEmbedding
+        shared_embed_model = FastEmbedEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        print("Shared Embedding Model initialized.")
+    return shared_embed_model
 
 def get_ingestion_service():
     """Lazy load ingestion service."""
@@ -54,7 +70,8 @@ def get_ingestion_service():
                 print("Initializing Ingestion Service...")
                 # Import here to prevent startup delay
                 from ingestion import RepositoryIngestion
-                ingestion_service = RepositoryIngestion()
+                embed_model = get_shared_embedding()
+                ingestion_service = RepositoryIngestion(embed_model=embed_model)
                 print("Ingestion Service initialized.")
             else:
                 print("WARNING: API keys missing. Ingestion Service not initialized.")
@@ -75,7 +92,8 @@ def get_rag_service():
                 print("Initializing RAG Service...")
                 # Import here to prevent startup delay
                 from rag import RAGQueryEngine
-                rag_service = RAGQueryEngine()
+                embed_model = get_shared_embedding()
+                rag_service = RAGQueryEngine(embed_model=embed_model)
                 print("RAG Service initialized.")
             else:
                 print("WARNING: API keys missing. RAG Service not initialized.")

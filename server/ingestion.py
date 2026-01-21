@@ -17,12 +17,15 @@ load_dotenv()
 class RepositoryIngestion:
     """Handles cloning, chunking, and indexing of GitHub repositories."""
     
-    def __init__(self):
+    def __init__(self, embed_model=None):
         # Switch to FastEmbed (ONNX-based, very fast, low memory)
         # Default model is constant, but stating it for clarity: "BAAI/bge-small-en-v1.5"
-        self.embed_model = FastEmbedEmbedding(
-             model_name="BAAI/bge-small-en-v1.5"
-        )
+        if embed_model:
+            self.embed_model = embed_model
+        else:
+            self.embed_model = FastEmbedEmbedding(
+                 model_name="BAAI/bge-small-en-v1.5"
+            )
         
         # Progress tracking
         self.progress = 0
