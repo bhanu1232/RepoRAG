@@ -91,15 +91,27 @@ def get_rag_service():
 async def startup_event():
     """
     FastAPI startup event. 
-    We intentionally DO NOT initialize heavy services here to allow 
-    fast port binding for Render/Heroku.
+    Initialize services immediately to ensure they are ready for user interaction.
     """
-    print("Application starting up... Services will verify on first use.")
+    print("Application starting up... Initializing services...")
+    try:
+        # Eagerly initialize services
+        get_ingestion_service()
+        get_rag_service()
+        print("All services initialized successfully.")
+    except Exception as e:
+        print(f"Warning: Service initialization incomplete: {e}")
 
 @app.get("/")
 async def root():
     """Root endpoint for health checks."""
-    return {"status": "running", "service": "RepoRAG API"}
+    # Add status info
+    rag_status = "ready" if rag_service else "initializing/failed"
+    return {
+        "status": "running", 
+        "service": "RepoRAG API",
+        "rag_status": rag_status
+    }
 
 @app.get("/health")
 async def health_check():
