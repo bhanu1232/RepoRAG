@@ -1,8 +1,8 @@
 import os
 from typing import List, Dict, Any
-from llama_index.core import VectorStoreIndex, PromptTemplate
+from llama_index.core import VectorStoreIndex, PromptTemplate, Settings
 from llama_index.llms.groq import Groq
-from llama_index.embeddings.fastembed import FastEmbedEmbedding
+from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -30,17 +30,22 @@ class RAGQueryEngine:
         )
         self.current_model = "groq"
         
-        # Initialize FastEmbed (ONNX, lightweight)
+        # Initialize Gemini Embedding (Cloud-based, Free Tier)
         if embed_model:
             self.embed_model = embed_model
         else:
-            self.embed_model = FastEmbedEmbedding(
-                model_name="BAAI/bge-small-en-v1.5"
+            # Uses GOOGLE_API_KEY from environment
+            self.embed_model = GeminiEmbedding(
+                model_name="models/text-embedding-004"
             )
+        
+        # Configure global settings to avoid local defaults
+        Settings.llm = self.llm
+        Settings.embed_model = self.embed_model
         
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-optimized")
+        index_name = os.getenv("PINECONE_INDEX_NAME", "reporag-gemini")
         
         self.pinecone_index = pc.Index(index_name)
         self.vector_store = PineconeVectorStore(pinecone_index=self.pinecone_index)

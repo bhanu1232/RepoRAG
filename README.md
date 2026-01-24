@@ -1,44 +1,71 @@
 # 🧠 RepoRAG - Advanced Repository Intelligence
 
-> **Chat with your codebase.** An intelligent, intent-aware RAG system that understands your code structure, generates diagrams, and delivers precise technical insights.
+> **Chat with your codebase.** An intelligent, hybrid RAG system that understands your code structure, generates diagrams, and delivers precise technical insights using a Dual-Engine Architecture.
 
-![RepoRAG UI](https://placehold.co/800x400/101827/emerald?text=RepoRAG+Interface) 
-*(Replace with actual screenshot)*
+![RepoRAG UI](https://placehold.co/800x400/101827/emerald?text=RepoRAG+Interface)
 
 ## ✨ Key Features
 
-### 🚀 **Advanced RAG Engine**
-- **Smart Intent Detection:** Automatically distinguishes between Coding Tasks, Debugging, architectural questions, and simple Q&A.
-- **Optimized Retrieval:** Dynamically adjusts context window and retrieval strategy based on query type.
-- **Single-Pass Generation:** Engineered for speed and efficiency with strictly optimized API usage (1 call per query).
-- **Smart Caching:** Instant responses for repeated queries.
+### 🏗️ **Hybrid "Dual-Engine" Architecture**
+RepoRAG isn't just a wrapper around an API. It employs a sophisticated hybrid approach:
+- **Server-Side Engine:** Powered by **Pinecone Serverless** and **Groq (Llama 3)** for deep reasoning on large codebases.
+- **Client-Side Engine:** Experimental local RAG using **Transformers.js (WebGPU)** and **IndexedDB**. Runs embeddings entirely in your browser for privacy and speed.
+
+### 🚀 **Advanced RAG Capabilities**
+- **Smart Intent Detection:** Automatically classifies queries (e.g., *Debugging*, *Architecture*, *Coding Task*) to optimize retrieval strategies.
+- **Hybrid Retrieval:** Combines **Semantic Search** (Vector) with **Keyword Search** (BM25-like) using **Reciprocal Rank Fusion (RRF)** for superior accuracy.
+- **Reranking:** Relevance scoring boosts code files vs. documentation based on query intent.
 
 ### 🎨 **Visualization & UI**
-- **Mermaid.js Support:** Automatically renders Flowcharts, Sequence Diagrams, and Architecture graphs from code descriptions.
-- **Minimalist "Pro" Interface:** A distraction-free, high-contrast dark mode design inspired by top-tier developer tools.
-- **Rich Markdown:** Beautifully formatted tables, code blocks with syntax highlighting, and collapsible file trees.
-
-### 🤖 **Multi-Model Intelligence**
-- **Dual-Core AI:** Seamlessly switch between **Groq (Llama 3.1)** for lightning-fast responses and **Gemini 1.5 Pro** for deep reasoning.
-- **Confidence Scoring:** Every answer comes with a transparency score (High/Medium/Low) based on source relevance.
+- **Mermaid.js Support:** Automatically renders Flowcharts, Sequence Diagrams, and Class Diagrams from code descriptions.
+- **"Pro" Developer Interface:** A high-contrast, distraction-free dark mode inspired by VS Code and Linear.
+- **Rich Markdown:** Syntax highlighting, file trees, and collapsible source citations.
 
 ---
 
 ## 🛠️ Tech Stack
 
-### **Frontend**
-- **Framework:** React 18 + Vite
-- **Styling:** TailwindCSS 4 + Typography Plugin
-- **Rendering:** React Markdown + Remark GFM
-- **Visuals:** Mermaid.js + Lucide Icons
+### **Frontend (Client)**
+- **Core:** React 19 + Vite 6
+- **Styling:** TailwindCSS v4
+- **Local AI:** `@xenova/transformers` (WebGPU), `IndexedDB` (Vector Store)
+- **Visuals:** Mermaid.js, Lucide React
 
-### **Backend**
+### **Backend (Server)**
 - **API:** FastAPI (Python 3.10+)
-- **RAG Framework:** LlamaIndex
-- **Vector Database:** Pinecone
-- **LLM Integrations:**
-  - `llama-3.1-8b-instant` (via Groq)
-  - `gemini-1.5-flash` (via Google AI)
+- **LLM:** `llama-3.3-70b-versatile` (via Groq)
+- **Embeddings:** `FastEmbed` (ONNX-based, `BAAI/bge-small-en-v1.5`)
+- **Vector DB:** Pinecone (Serverless / AWS us-east-1)
+- **Orchestration:** LlamaIndex
+
+---
+
+## 📐 Architecture
+
+```mermaid
+graph TD
+    User[User Query] --> Intent{Intent Detection}
+    
+    Intent -->|Complex/Deep| Server[Server-Side RAG]
+    Intent -->|Privacy/Fast| Client[Client-Side RAG]
+    
+    subgraph Server ["Server (Python/FastAPI)"]
+        Server --> Embed[FastEmbed (ONNX)]
+        Embed --> Pinecone[(Pinecone Vector DB)]
+        Pinecone --> Hybrid[Hybrid Retriever]
+        Hybrid --> Rerank[RRF Reranking]
+        Rerank --> LLM[Groq (Llama 3)]
+    end
+    
+    subgraph Client ["Client (Browser/WASM)"]
+        Client --> TF[Transformers.js (WebGPU)]
+        TF --> IDB[(IndexedDB Vector Store)]
+        IDB --> LocalLLM[LLM Gateway]
+    end
+    
+    LLM --> Response
+    LocalLLM --> Response
+```
 
 ---
 
@@ -47,75 +74,68 @@
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
-- API Keys for: `GROQ`, `GEMINI`, `PINECONE`
+- API Keys: `GROQ_API_KEY`, `PINECONE_API_KEY`
 
-### Installation
+### 1. Backend Setup
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/reporag.git
-   cd reporag
-   ```
+```bash
+cd server
 
-2. **Setup Backend**
-   ```bash
-   cd server
-   python -m venv venv
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
-   pip install -r requirements.txt
-   ```
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-3. **Configure Environment**
-   Create a `.env` file in `server/`:
-   ```env
-   GROQ_API_KEY=your_groq_key
-   GEMINI_API_KEY=your_gemini_key
-   PINECONE_API_KEY=your_pinecone_key
-   PINECONE_INDEX_NAME=reporag-index
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-4. **Setup Frontend**
-   ```bash
-   cd client
-   npm install
-   ```
+# Configure Environment
+# Create a .env file with your keys:
+# GROQ_API_KEY=...
+# PINECONE_API_KEY=...
+# PINECONE_INDEX_NAME=reporag-optimized
 
-### Running the App
+# Start the Server
+python main.py
+# Server running at http://localhost:8000
+```
 
-1. **Start Backend Server**
-   ```bash
-   # In server/ directory
-   python main.py
-   # Server runs at http://localhost:8000
-   ```
+### 2. Frontend Setup
 
-2. **Start Frontend Client**
-   ```bash
-   # In client/ directory
-   npm run dev
-   # Client runs at http://localhost:5173
-   ```
+```bash
+cd client
+
+# Install dependencies
+npm install
+
+# Start the Development Server
+npm run dev
+# App running at http://localhost:5173
+```
 
 ---
 
 ## 💡 Usage Guide
 
-### **1. Indexing a Repo**
-- Enter a GitHub URL in the sidebar.
-- Click "Index Repository".
-- Watch the real-time progress bar as RepoRAG clones, processes, and embeds your codebase.
+### **1. Indexing a Repository**
+- Enter a GitHub URL (e.g., `https://github.com/fastapi/fastapi`).
+- The server clones, chunks, and generates embeddings (using FastEmbed).
+- Vectors are stored in Pinecone (Serverless) for persistent, fast retrieval.
 
 ### **2. Asking Questions**
-- **"Explain the auth flow"** -> Returns a text explanation.
-- **"Draw a diagram of the backend architecture"** -> Renders a live Mermaid chart.
-- **"Compare User vs Admin classes"** -> Displays a comparison table.
+- **"Explain the authentication flow in auth.py"** → Returns a detailed explanation with code citations.
+- **"Draw a class diagram of the user model"** → Renders a live Mermaid diagram.
+- **"Debug this error in main.py..."** → Analyzing potential issues based on the actual code context.
+
+### **3. Hybrid Mode (Experimental)**
+- Navigate to the "Hybrid Demo" section to test in-browser embedding generation.
+- Note: Requires a WebGPU-compatible browser (e.g., Chrome, Edge).
 
 ---
 
-## 🔮 Future Roadmap
-- [ ] Local LLM Support (Ollama)
-- [ ] Multi-repo context window
-- [ ] IDE Extension (VS Code)
+## 🔮 Roadmap
+- [ ] Full Offline Mode (Local LLM via WebLLM)
+- [ ] Multi-Repository Context Integration
+- [ ] VS Code Extension
 
 ---
 

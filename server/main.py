@@ -72,9 +72,14 @@ def get_shared_embedding():
     global shared_embed_model
     if not shared_embed_model:
         print("Initializing Shared Embedding Model...")
-        from llama_index.embeddings.fastembed import FastEmbedEmbedding
-        shared_embed_model = FastEmbedEmbedding(model_name="BAAI/bge-small-en-v1.5")
-        print("Shared Embedding Model initialized.")
+        try:
+            from llama_index.embeddings.gemini import GeminiEmbedding
+            # Uses GOOGLE_API_KEY from environment
+            shared_embed_model = GeminiEmbedding(model_name="models/text-embedding-004")
+            print("Shared Embedding Model initialized.")
+        except Exception as e:
+            print(f"Error initializing shared embedding: {e}")
+            raise e
     return shared_embed_model
 
 def get_ingestion_service():
