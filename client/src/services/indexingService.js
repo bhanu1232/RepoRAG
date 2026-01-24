@@ -25,9 +25,7 @@ class IndexingService {
       this.updateProgress('Requesting repository chunks from server...', 0);
 
       // Step 1: Request server to clone and chunk repository
-      // Hardcoded for production stability
-      const API_URL = 'https://reporag.onrender.com';
-      const response = await fetch(`${API_URL}/api/clone-and-chunk`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/clone-and-chunk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl }),
@@ -117,8 +115,7 @@ class IndexingService {
       }
 
       // Request changed files from server
-      const API_URL = 'https://reporag.onrender.com';
-      const response = await fetch(`${API_URL}/api/get-changes`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/get-changes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repo.url }),
