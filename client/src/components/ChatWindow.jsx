@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Loader2, Send, Trash2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import logo from '../assets/logo.png';
+// Used environment variable for flexibility
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
