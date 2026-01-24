@@ -65,7 +65,8 @@ class QueryService {
 
       // Step 5: Call server LLM gateway
       console.log('[QueryService] Calling LLM...');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/generate`, {
+      const API_URL = 'https://reporag.onrender.com';
+      const response = await fetch(`${API_URL}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

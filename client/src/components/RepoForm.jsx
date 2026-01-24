@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { GitBranch, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Hardcoded for production stability
+const API_URL = 'https://reporag.onrender.com';
+// const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const RepoForm = ({ onRepoIndexed, isIndexed }) => {
     const [repoUrl, setRepoUrl] = useState('');
