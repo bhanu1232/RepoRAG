@@ -46,6 +46,14 @@ class ChatResponse(BaseModel):
     confidence: Optional[dict] = None
     intent: Optional[str] = None
 
+class CloneAndChunkRequest(BaseModel):
+    repo_url: HttpUrl
+
+class GenerateRequest(BaseModel):
+    context: str
+    query: str
+    stream: Optional[bool] = False
+
 # Global instances
 ingestion_service = None
 rag_service = None
@@ -260,6 +268,109 @@ async def chat(request: ChatRequest):
         "confidence": result.get("confidence"),
         "intent": result.get("intent")
     }
+
+@app.post("/api/clone-and-chunk")
+async def clone_and_chunk(request: CloneAndChunkRequest):
+    """
+    NEW HYBRID ENDPOINT: Clone repository and return chunks to client.
+    Client will generate embeddings in browser.
+    """
+    try:
+        import tempfile
+        import shutil
+        from git import Repo
+        from ingestion import RepositoryIngestion
+        
+        # Clone repository
+        temp_dir = tempfile.mkdtemp(prefix="reporag_")
+        try:
+            print(f"Cloning repository: {request.repo_url}")
+            Repo.clone_from(str(request.repo_url), temp_dir, depth=1)
+            
+            # Load and chunk code (without embedding)
+            service = RepositoryIngestion()
+            nodes = service.load_and_chunk_code(temp_dir)
+            
+            # Convert nodes to simple dict format for client
+            chunks = []
+            for node in nodes:
+                chunks.append({
+                    "id": node.node_id,
+                    "text": node.text,
+                    "metadata": {
+                        "file": node.metadata.get("file_path", ""),
+                        "start_line": node.metadata.get("start_line", "N/A"),
+                        "end_line": node.metadata.get("end_line", "N/A"),
+                        "file_category": node.metadata.get("file_category", "code"),
+                    }
+                })
+            
+            # Extract repo name
+            repo_name = str(request.repo_url).split("/")[-1].replace(".git", "")
+            
+            return {
+                "chunks": chunks,
+                "metadata": {
+                    "name": repo_name,
+                    "fileCount": len(set([c["metadata"]["file"] for c in chunks])),
+                    "chunkCount": len(chunks),
+                }
+            }
+            
+        finally:
+            # Cleanup
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                
+    except Exception as e:
+        print(f"Error in clone_and_chunk: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/generate")
+async def generate(request: GenerateRequest):
+    """
+    NEW HYBRID ENDPOINT: Lightweight LLM gateway only.
+    Client provides context from local vector search.
+    """
+    try:
+        from llama_index.llms.groq import Groq
+        
+        # Initialize Groq LLM
+        llm = Groq(
+            model="llama-3.3-70b-versatile",
+            api_key=os.getenv("GROQ_API_KEY"),
+            temperature=0.1,
+        )
+        
+        # Build prompt
+        prompt = f"""You are an elite Senior Software Engineer and Architect analyzing a codebase.
+
+Context from codebase:
+{request.context}
+
+User Question: {request.query}
+
+Provide a detailed, technical answer based ONLY on the provided context. Include:
+- Specific code references
+- Function/class names
+- Logic flow explanations
+- Best practices and patterns used
+
+If the context doesn't contain relevant information, say so."""
+        
+        # Generate response
+        response = llm.complete(prompt)
+        
+        return {
+            "answer": str(response),
+            "confidence": {"score": 0.85, "level": "high"},
+        }
+        
+    except Exception as e:
+        print(f"Error in generate: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
