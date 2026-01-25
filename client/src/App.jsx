@@ -1,13 +1,24 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import Login from './components/Login';
 import RepoForm from './components/RepoForm';
 import ChatWindow from './components/ChatWindow';
-import { Terminal, Database, MessageSquare, Menu, Plus } from 'lucide-react';
+import { Terminal, Menu, Plus } from 'lucide-react';
 import logo from './assets/logo.png';
-function App() {
+
+// Protected Route Component
+const PrivateRoute = ({ children }) => {
+  const { currentUser } = useAuth();
+  return currentUser ? children : <Navigate to="/login" />;
+};
+
+function Dashboard() {
   const [isRepoIndexed, setIsRepoIndexed] = useState(false);
   const [repoUrl, setRepoUrl] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [suggestedPrompt, setSuggestedPrompt] = useState('');
+  const { logout, currentUser } = useAuth();
 
   const suggestions = [
     "Give me architecture flowchart",
@@ -33,7 +44,7 @@ function App() {
 
       <div
         className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } fixed md:relative z-40 w-[280px] h-full bg-[#181818] border-r border-white/10 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 font-sans`}
+          } fixed md:relative z-40 w-[280px] h-full bg-[#000000] border-r border-white/10 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 font-sans`}
       >
         {/* Sidebar Header */}
         <div className="p-3 mb-2">
@@ -92,17 +103,14 @@ function App() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-4 py-5 border-t border-white/10 bg-[#181818]">
-          <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-zinc-900 cursor-pointer group">
-            <div className="h-9 w-9 overflow-hidden pt-4 rounded-lg bg-[#212121] flex items-center justify-center shadow-lg   transition-all">
-              <img src={logo} alt="Logo" className="w-6 h-6 rounded-full flex items-center justify-center mb-4 mx-auto" />
+        <div className="p-4 border-t border-white/10 bg-[#000000]">
+          <div className="flex items-center gap-3 px-2 py-2 rounded-xl mb-2 hover:bg-zinc-900 transition-colors group">
+            <div className="h-8 w-8 rounded-full bg-emerald-900/50 flex items-center justify-center text-xs font-bold text-emerald-400 border border-emerald-900">
+              {currentUser?.email?.[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white truncate">RepoRAG</div>
-              <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                Online
-              </div>
+              <div className="text-xs font-medium text-white truncate">{currentUser?.email}</div>
+              <button onClick={logout} className="text-[10px] text-zinc-500 hover:text-white transition-colors">Sign out</button>
             </div>
           </div>
         </div>
@@ -117,6 +125,24 @@ function App() {
         />
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
+      </Routes>
+    </Router>
   );
 }
 
