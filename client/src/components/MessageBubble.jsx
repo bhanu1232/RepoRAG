@@ -221,4 +221,4 @@ const MessageBubble = ({ message, isLatest }) => {
     );
 };
 
-export default MessageBubble;
+export default React.memo(MessageBubble);
