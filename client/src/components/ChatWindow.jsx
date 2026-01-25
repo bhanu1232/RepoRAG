@@ -25,7 +25,25 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
     };
 
     useEffect(() => {
-        if (messagesEndRef.current) {
+        if (!chatContainerRef.current || !messagesEndRef.current) return;
+
+        const container = chatContainerRef.current;
+        const lastMessage = messages[messages.length - 1];
+
+        // Always scroll to bottom for user messages
+        // This ensures the user sees their own message immediately.
+        if (lastMessage?.role === 'user') {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+
+        // For assistant messages, only scroll if the user was already near the bottom.
+        // We check this *after* the new message has rendered.
+        // If the user was near the bottom, the new message would have pushed the scrollbar down.
+        // So, we check if the current scroll position is such that the bottom is visible or almost visible.
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100; // Within 100px of the bottom
+
+        if (isNearBottom) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages]);
@@ -136,7 +154,11 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
 
                             {/* Messages */}
                             {messages.map((msg, idx) => (
-                                <MessageBubble key={idx} message={msg} />
+                                <MessageBubble
+                                    key={idx}
+                                    message={msg}
+                                    isLatest={idx === messages.length - 1}
+                                />
                             ))}
                         </>
                     )}

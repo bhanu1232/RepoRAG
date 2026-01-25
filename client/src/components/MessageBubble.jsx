@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -9,9 +9,56 @@ import CollapsibleFileTree from './CollapsibleFileTree';
 import MermaidDiagram from './MermaidDiagram';
 import logo from "../assets/logo.png"
 
-const MessageBubble = ({ message }) => {
+const MessageBubble = ({ message, isLatest }) => {
     const isUser = message.role === 'user';
     const [copied, setCopied] = useState(false);
+    const [displayedContent, setDisplayedContent] = useState(isUser || !isLatest ? message.content : '');
+    const [isTyping, setIsTyping] = useState(false);
+
+    useEffect(() => {
+        // Check for diagram code blocks to avoid partial rendering syntax errors
+        const hasMermaid = message.content.includes('```mermaid') ||
+            message.content.includes('```graph') ||
+            message.content.includes('```sequenceDiagram') ||
+            message.content.includes('```classDiagram') ||
+            message.content.includes('```stateDiagram') ||
+            message.content.includes('```erDiagram') ||
+            message.content.includes('```flowchart') ||
+            message.content.includes('```gantt') ||
+            message.content.includes('```pie');
+
+        // If it's a user message, not latest, or contains complex diagrams, show full content immediately
+        if (isUser || !isLatest || hasMermaid) {
+            setDisplayedContent(message.content);
+            setIsTyping(false);
+            return;
+        }
+
+        // If content already displayed fully, don't restart (unless content changed, which is rare here)
+        if (displayedContent === message.content) return;
+
+        setIsTyping(true);
+        let currentIndex = 0;
+        const text = message.content;
+
+        const intervalId = setInterval(() => {
+            if (currentIndex >= text.length) {
+                clearInterval(intervalId);
+                setIsTyping(false);
+                setDisplayedContent(text); // Ensure complete exact match
+                return;
+            }
+
+            // Add a chunk of characters for faster typing feeling but smooth
+            const chunk = Math.max(1, Math.floor(text.length / 200)); // Dynamic speed based on length
+            const nextIndex = Math.min(currentIndex + chunk + 1, text.length);
+
+            setDisplayedContent(text.slice(0, nextIndex));
+            currentIndex = nextIndex;
+        }, 10); // 10ms interval
+
+        return () => clearInterval(intervalId);
+    }, [message.content, isLatest, isUser]);
 
     const copyToClipboard = (text) => {
         navigator.clipboard.writeText(text);
@@ -160,7 +207,7 @@ const MessageBubble = ({ message }) => {
                                         }
                                     }}
                                 >
-                                    {message.content}
+                                    {displayedContent}
                                 </ReactMarkdown>
 
                                 {/* Minimal Source List */}

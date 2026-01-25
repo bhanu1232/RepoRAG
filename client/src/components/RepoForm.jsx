@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { GitBranch, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import loader from "../assets/load1.gif"
+import loader from "../assets/load.gif"
 // Used environment variable for flexibility
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
