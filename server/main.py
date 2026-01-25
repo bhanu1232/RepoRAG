@@ -208,6 +208,14 @@ def run_indexing_task(repo_url: str):
             print(f"Indexing completed successfully: {result}")
             indexing_status["result"] = result
             indexing_status["error"] = None
+            
+            # Pre-initialize RAG service so it's ready for the fast chat
+            print("Pre-loading RAG service for instant response...")
+            try:
+                get_rag_service()
+                print("RAG Service pre-loaded successfully.")
+            except Exception as e:
+                print(f"Warning: Failed to pre-load RAG service: {e}")
         else:
             print(f"Indexing failed: {result['message']}")
             indexing_status["error"] = result["message"]
