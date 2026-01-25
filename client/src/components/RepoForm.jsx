@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { GitBranch, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-
+import loader from "../assets/load1.gif"
 // Used environment variable for flexibility
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -114,22 +115,6 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
                     {loading ? 'Indexing...' : isIndexed ? 'Loaded' : 'Load Repo'}
                 </button>
 
-                {/* Progress Bar */}
-                {loading && (
-                    <div className="mt-2 space-y-2 animate-fadeIn">
-                        <div className="flex items-center justify-between text-xs">
-                            <span className="text-emerald-400 font-medium">{currentStage}</span>
-                            <span className="text-gray-400">{Math.round(progress)}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-300 ease-out rounded-full"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                    </div>
-                )}
-
                 {status === 'success' && (
                     <div className="flex items-center gap-2 text-xs text-emerald-400 mt-1 animate-fadeIn">
                         <CheckCircle2 className="h-3 w-3" />
@@ -144,6 +129,37 @@ const RepoForm = ({ onRepoIndexed, isIndexed }) => {
                     </div>
                 )}
             </form>
+
+            {/* Progress Modal */}
+            {loading && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 animate-in fade-in duration-200">
+                    <div className="bg-[#212121] border border-white/5 rounded-2xl p-10 w-full max-w-sm shadow-2xl flex flex-col items-center space-y-8 animate-in zoom-in-95 duration-200">
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-white/5 blur-2xl rounded-full"></div>
+                            <img src={loader} alt="loader" className="text-white" />
+                        </div>
+
+                        <div className="w-full space-y-3 text-center">
+                            <h3 className="text-lg font-medium text-white tracking-tight">Indexing Repository</h3>
+                            <p className="text-zinc-400 text-sm font-light min-h-[20px]">{currentStage}</p>
+                        </div>
+
+                        <div className="w-full space-y-2">
+                            <div className="flex justify-between text-[10px] text-zinc-500 font-medium uppercase tracking-widest">
+                                <span>Progress</span>
+                                <span>{Math.round(progress)}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-white rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };
