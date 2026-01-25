@@ -40,16 +40,16 @@ const MessageBubble = ({ message }) => {
     };
 
     return (
-        <div className={`group w-full mb-2 py-4 ${isUser ? '' : 'border-b border-gray-100 dark:border-gray-800/50'}`}>
+        <div className={`group w-full mb-2 py-4 ${isUser ? '' : 'border-b border-gray-800/50'}`}>
             <div className="max-w-4xl mx-auto flex gap-6 px-4">
                 {/* Avatar */}
                 <div className="flex-shrink-0 mt-1">
                     {isUser ? (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                            <User className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+                        <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
+                            <User className="h-4 w-4 text-gray-300" />
                         </div>
                     ) : (
-                        <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-gray-100 dark:ring-gray-800">
+                        <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-gray-800">
                             <img src={logo} alt="Bot" className="w-full h-full object-cover" />
                         </div>
                     )}
@@ -61,30 +61,30 @@ const MessageBubble = ({ message }) => {
                     {/* Bot Header (Name & Meta) */}
                     {!isUser && (
                         <div className="flex items-center gap-2 mb-1 select-none">
-                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            <span className="text-sm font-semibold text-gray-100">
                                 RepoRAG
                             </span>
                             {getConfidenceIndicator(message.confidence)}
                             {message.intent && (
-                                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-800">
+                                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium px-1.5 py-0.5 rounded border border-gray-800">
                                     {message.intent}
                                 </span>
                             )}
                         </div>
                     )}
 
-                    <div className={`text-[15px] leading-7 text-gray-800 dark:text-gray-200 
+                    <div className={`text-[15px] leading-7 text-gray-200 
                         ${isUser ? 'whitespace-pre-wrap' : ''}`}>
                         {isUser ? (
                             message.content
                         ) : (
-                            <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none
-                                prose-headings:font-semibold prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-headings:mb-4 prose-headings:mt-6
+                            <div className="prose prose-sm md:prose-base prose-invert max-w-none
+                                prose-headings:font-semibold prose-headings:text-gray-100 prose-headings:mb-4 prose-headings:mt-6
                                 prose-p:leading-7 prose-p:mb-4 prose-p:mt-0
                                 prose-li:my-1
                                 prose-pre:bg-[#0d1117] prose-pre:rounded-lg prose-pre:border prose-pre:border-gray-800 prose-pre:p-0
-                                prose-code:text-sm prose-code:bg-gray-100 dark:prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
-                                prose-table:text-sm prose-th:bg-gray-50 dark:prose-th:bg-gray-800/50
+                                prose-code:text-sm prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+                                prose-table:text-sm prose-th:bg-gray-800/50
                             ">
                                 <ReactMarkdown
                                     remarkPlugins={[remarkGfm]}

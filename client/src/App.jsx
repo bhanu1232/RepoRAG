@@ -10,11 +10,13 @@ function App() {
   const [suggestedPrompt, setSuggestedPrompt] = useState('');
 
   const suggestions = [
+    "Give me architecture flowchart",
+    "Give me the Route flowchart",
     "Explain project structure",
+    "Check API endpoints",
     "Find authentication logic",
     "Security audit of code",
     "Summarize README.md",
-    "Check API endpoints"
   ];
 
   return (

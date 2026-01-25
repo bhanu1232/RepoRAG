@@ -30,6 +30,12 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
         }
     }, [messages]);
 
+    useEffect(() => {
+        if (suggestedPrompt) {
+            setInput(suggestedPrompt);
+        }
+    }, [suggestedPrompt]);
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!input.trim() || loading) return;
@@ -69,13 +75,13 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
 
     if (!isRepoIndexed) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-[#212121]">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#212121]">
                 <div className="animate-fadeIn">
                     <img src={logo} alt="Logo" className="w-12 h-12 rounded-full flex items-center justify-center mb-4 mx-auto" />
-                    <h2 className="text-2xl font-semibold dark:text-gray-100 mb-2">
+                    <h2 className="text-2xl font-semibold text-gray-100 mb-2">
                         Welcome to RepoRAG
                     </h2>
-                    <p className="max-w-md text-gray-600 dark:text-gray-400 text-sm">
+                    <p className="max-w-md text-gray-400 text-sm">
                         Index a repository to start analyzing your codebase with AI
                     </p>
                 </div>
@@ -84,7 +90,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-[#212121]">
+        <div className="flex flex-col h-full bg-[#212121]">
             {/* Messages Area */}
             <div
                 ref={chatContainerRef}
@@ -97,15 +103,13 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                 <div className="flex flex-col w-full">
                     {messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-                            <div className="w-12 h-12 rounded-full bg-emerald-600 flex items-center justify-center mb-4 mx-auto">
-                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 mx-auto">
+                                <img src={logo} alt="Logo" className=" text-white" />
                             </div>
-                            <h3 className="text-xl font-medium text-gray-800 dark:text-gray-100 mb-1">
+                            <h3 className="text-xl mt-2.5 font-medium text-gray-100 mb-1">
                                 How can I help you today?
                             </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                            <p className="text-sm text-gray-400">
                                 Ask me anything about your codebase
                             </p>
                         </div>
@@ -114,16 +118,16 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                             {/* Sticky Header with Repo Title and Clear Button */}
                             <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 bg-[#212121]">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                                     </svg>
-                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
+                                    <span className="text-xs font-medium text-gray-300 truncate">
                                         {repoUrl ? repoUrl.split('/').slice(-2).join('/') : 'Repository'}
                                     </span>
                                 </div>
                                 <button
                                     onClick={() => setShowClearModal(true)}
-                                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors flex-shrink-0"
+                                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-md transition-colors flex-shrink-0"
                                 >
                                     <Trash2 className="h-3.5 w-3.5" />
                                     Clear
@@ -139,7 +143,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
 
                     {/* Loading Indicator */}
                     {loading && (
-                        <div className="w-full bg-gray-50 dark:bg-[#2f2f2f] border-b border-gray-100 dark:border-gray-800">
+                        <div className="w-full bg-[#2f2f2f] border-b border-gray-800">
                             <div className="max-w-3xl mx-auto px-4 py-6">
                                 <div className="flex items-center gap-4">
                                     <div className="w-8 h-8 rounded-sm bg-emerald-600 flex items-center justify-center shrink-0">
@@ -161,7 +165,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
             </div>
 
             {/* Input Area - Compact */}
-            <div className="border-t border-gray-200 dark:border-[#27272a] bg-white dark:bg-[#212121]">
+            <div className="border-t border-[#27272a] bg-[#212121]">
                 <div className="max-w-3xl mx-auto px-4 py-2.5">
                     {/* Input Form */}
                     <form onSubmit={handleSend} className="flex gap-2">
@@ -176,7 +180,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                                 }
                             }}
                             placeholder="Ask about the codebase..."
-                            className="flex-1 bg-gray-100 dark:bg-[#40414f] border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none scrollbar-hide"
+                            className="flex-1 bg-[#303030] rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent resize-none scrollbar-hide"
                             rows="1"
                             style={{ maxHeight: '120px' }}
                             disabled={loading}
@@ -184,17 +188,17 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                         <button
                             type="submit"
                             disabled={!input.trim() || loading}
-                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center disabled:cursor-not-allowed"
+                            className="px-4 py-2.5 bg-[#ffffff] cursor-pointer hover:bg-gray-400  text-black rounded-lg transition-colors flex items-center justify-center disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <Loader2 className="h-5 w-5 animate-spin" />
                             ) : (
-                                <Send className="h-5 w-5" />
+                                <Send className="h-5 w-5 text-black" />
                             )}
                         </button>
                     </form>
 
-                    <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    <p className="text-center text-xs text-gray-400 mt-2">
                         RepoRAG can make mistakes. Check important info.
                     </p>
                 </div>
@@ -203,19 +207,19 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
             {/* Clear Chat Confirmation Modal */}
             {showClearModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 animate-scaleIn">
+                    <div className="bg-[#303030] rounded-xl shadow-2xl max-w-md w-full p-6 animate-scaleIn">
                         {/* Modal Header */}
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                            <div className="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center">
+                                <Trash2 className="h-5 w-5 text-red-400" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                            <h3 className="text-lg font-bold text-gray-100">
                                 Clear Chat History
                             </h3>
                         </div>
 
                         {/* Modal Content */}
-                        <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm leading-relaxed">
+                        <p className="text-gray-300 mb-6 text-sm leading-relaxed">
                             Are you sure you want to clear all messages? This action cannot be undone and all conversation history will be permanently deleted.
                         </p>
 
@@ -223,7 +227,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setShowClearModal(false)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
                             >
                                 Cancel
                             </button>
