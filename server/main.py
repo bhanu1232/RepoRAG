@@ -137,6 +137,10 @@ async def startup_event():
     print("Services will be initialized on first use (lazy loading)")
     print("Startup complete - ready to accept requests")
 
+@app.get("/health")
+def health_check():
+    return {"status": "active"}
+    
 @app.get("/")
 async def root():
     """Root endpoint for health checks."""
