@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Loader2, Send, Trash2 } from 'lucide-react';
 import MessageBubble from './MessageBubble';
+import RepoForm from './RepoForm';
 import logo from '../assets/logo.png';
 // Used environment variable for flexibility
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
-    // ... state ...
+const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl, onRepoIndexed }) => {
     const [messages, setMessages] = useState([]);
 
     const [input, setInput] = useState('');
@@ -94,14 +94,18 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
     if (!isRepoIndexed) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#212121]">
-                <div className="animate-fadeIn">
+                <div className="animate-fadeIn w-full max-w-md">
                     <img src={logo} alt="Logo" className="w-12 h-12 rounded-full flex items-center justify-center mb-4 mx-auto" />
                     <h2 className="text-2xl font-semibold text-gray-100 mb-2">
                         Welcome to RepoRAG
                     </h2>
-                    <p className="max-w-md text-gray-400 text-sm">
+                    <p className="text-gray-400 text-sm mb-8">
                         Index a repository to start analyzing your codebase with AI
                     </p>
+
+                    <div className="bg-zinc-800/50 p-4 rounded-xl border border-white/5 shadow-lg text-left backdrop-blur-sm">
+                        <RepoForm onRepoIndexed={onRepoIndexed} isIndexed={false} />
+                    </div>
                 </div>
             </div>
         );
@@ -202,7 +206,7 @@ const ChatWindow = ({ isRepoIndexed, suggestedPrompt, repoUrl }) => {
                                 }
                             }}
                             placeholder="Ask about the codebase..."
-                            className="flex-1 bg-[#303030] rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent resize-none scrollbar-hide"
+                            className="flex-1 bg-[#303030] rounded-lg px-4 py-3 text-base md:text-sm text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent resize-none scrollbar-hide"
                             rows="1"
                             style={{ maxHeight: '120px' }}
                             disabled={loading}

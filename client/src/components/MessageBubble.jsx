@@ -88,7 +88,7 @@ const MessageBubble = ({ message, isLatest }) => {
 
     return (
         <div className={`group w-full mb-2 py-4 ${isUser ? '' : 'border-b border-gray-800/50'}`}>
-            <div className="max-w-4xl mx-auto flex gap-6 px-4">
+            <div className="max-w-4xl mx-auto flex gap-3 md:gap-6 px-4">
                 {/* Avatar */}
                 <div className="flex-shrink-0 mt-1">
                     {isUser ? (
@@ -103,7 +103,7 @@ const MessageBubble = ({ message, isLatest }) => {
                 </div>
 
                 {/* Content */}
-                <div className={`flex-1 min-w-0 overflow-hidden ${isUser ? 'font-medium' : ''}`}>
+                <div className={`flex-1 min-w-0 ${isUser ? 'font-medium' : ''}`}>
 
                     {/* Bot Header (Name & Meta) */}
                     {!isUser && (
@@ -125,11 +125,12 @@ const MessageBubble = ({ message, isLatest }) => {
                         {isUser ? (
                             message.content
                         ) : (
-                            <div className="prose prose-sm md:prose-base prose-invert max-w-none
+                            <div className="prose prose-sm md:prose-base prose-invert max-w-full overflow-x-auto
                                 prose-headings:font-semibold prose-headings:text-gray-100 prose-headings:mb-4 prose-headings:mt-6
                                 prose-p:leading-7 prose-p:mb-4 prose-p:mt-0
                                 prose-li:my-1
                                 prose-pre:bg-[#0d1117] prose-pre:rounded-lg prose-pre:border prose-pre:border-gray-800 prose-pre:p-0
+                                prose-pre:max-w-[calc(100vw-5rem)] md:prose-pre:max-w-none
                                 prose-code:text-sm prose-code:bg-gray-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
                                 prose-table:text-sm prose-th:bg-gray-800/50
                             ">
@@ -217,7 +218,7 @@ const MessageBubble = ({ message, isLatest }) => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

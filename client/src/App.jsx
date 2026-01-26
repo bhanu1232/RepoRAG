@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
 import RepoForm from './components/RepoForm';
 import ChatWindow from './components/ChatWindow';
-import { Terminal, Menu, Plus } from 'lucide-react';
+import { Terminal, Menu, Plus, X } from 'lucide-react';
 import logo from './assets/logo.png';
 
 // Protected Route Component
@@ -16,9 +16,23 @@ const PrivateRoute = ({ children }) => {
 function Dashboard() {
   const [isRepoIndexed, setIsRepoIndexed] = useState(false);
   const [repoUrl, setRepoUrl] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Initialize based on screen size
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   const [suggestedPrompt, setSuggestedPrompt] = useState('');
   const { logout, currentUser } = useAuth();
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(true);
+      } else {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const suggestions = [
     "Give me architecture flowchart",
@@ -30,27 +44,45 @@ function Dashboard() {
     "Summarize README.md",
   ];
 
+  const handleSuggestionClick = (s) => {
+    setSuggestedPrompt(s);
+    setTimeout(() => setSuggestedPrompt(''), 100);
+    // Close sidebar on mobile when selection is made
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-black text-gray-100 font-sans overflow-hidden">
-      {/* Mobile Sidebar Overlay */}
+    <div className="flex h-[100dvh] bg-black text-gray-100 font-sans overflow-hidden relative">
+      {/* Mobile Sidebar Backrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile Menu Button */}
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed top-4 left-4 z-50 p-2 rounded-md hover:bg-zinc-800 md:hidden"
+          className="fixed top-4 left-4 z-20 p-2 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white md:hidden"
         >
           <Menu className="h-6 w-6" />
         </button>
       )}
 
+      {/* Sidebar */}
       <div
         className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } fixed md:relative z-40 w-[280px] h-full bg-[#000000] border-r border-white/10 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 font-sans`}
       >
         {/* Sidebar Header */}
-        <div className="p-3 mb-2">
+        <div className="p-3 mb-2 flex items-center justify-between gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="group flex items-center justify-between px-3 py-2.5 w-full rounded-lg hover:bg-zinc-900 transition-all border border-white/10 hover:border-white/20 text-sm font-medium text-zinc-200 hover:text-white"
+            className="group flex-1 flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-zinc-900 transition-all border border-white/10 hover:border-white/20 text-sm font-medium text-zinc-200 hover:text-white"
           >
             <div className="flex items-center gap-2">
               <div className="p-1 rounded bg-white/10 group-hover:bg-white/20 transition-colors">
@@ -59,24 +91,34 @@ function Dashboard() {
               <span>New Chat</span>
             </div>
           </button>
+
+          {/* Mobile Close Button */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Sidebar Content */}
         <div className="flex-1 overflow-y-auto px-3 space-y-6 custom-scrollbar">
 
-          {/* Repo Input Section */}
-          <div className="space-y-3">
-            <h3 className="px-2 text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
-              Active Repository
-            </h3>
-            <RepoForm
-              onRepoIndexed={(url) => {
-                setIsRepoIndexed(true);
-                setRepoUrl(url);
-              }}
-              isIndexed={isRepoIndexed}
-            />
-          </div>
+          {/* Repo Input Section - Only show when a repo is active (to allow switching) */}
+          {isRepoIndexed && (
+            <div className="space-y-3">
+              <h3 className="px-2 text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
+                Active Repository
+              </h3>
+              <RepoForm
+                onRepoIndexed={(url) => {
+                  setIsRepoIndexed(true);
+                  setRepoUrl(url);
+                }}
+                isIndexed={isRepoIndexed}
+              />
+            </div>
+          )}
 
           {/* Suggestions Section */}
           <div className="space-y-2">
@@ -87,11 +129,7 @@ function Dashboard() {
               {suggestions.map((s, i) => (
                 <div
                   key={i}
-                  onClick={() => {
-                    setSuggestedPrompt(s);
-                    // Briefly reset so it can be re-triggered
-                    setTimeout(() => setSuggestedPrompt(''), 100);
-                  }}
+                  onClick={() => handleSuggestionClick(s)}
                   className="group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-900 cursor-pointer transition-colors text-sm text-zinc-400 hover:text-zinc-200"
                 >
                   <Terminal className="h-4 w-4 opacity-50" />
@@ -122,6 +160,10 @@ function Dashboard() {
           isRepoIndexed={isRepoIndexed}
           suggestedPrompt={suggestedPrompt}
           repoUrl={repoUrl}
+          onRepoIndexed={(url) => {
+            setIsRepoIndexed(true);
+            setRepoUrl(url);
+          }}
         />
       </div>
     </div>
