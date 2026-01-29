@@ -173,11 +173,20 @@ class StagedHybridRetriever:
         filtered_nodes = []
         
         for node in nodes:
-            metadata = node.metadata if hasattr(node, 'metadata') else {}
+            # Handle both NodeWithScore and raw node objects
+            actual_node = node.node if hasattr(node, 'node') else node
+            metadata = {}
+            
+            # Safely get metadata
+            if hasattr(actual_node, 'metadata'):
+                metadata = actual_node.metadata
+            elif isinstance(actual_node, dict) and 'metadata' in actual_node:
+                metadata = actual_node['metadata']
+            
             passes_filter = True
             
             for key, value in post_filters.items():
-                node_value = metadata.get(key)
+                node_value = metadata.get(key) if isinstance(metadata, dict) else None
                 
                 # Handle different filter types
                 if isinstance(value, bool):
@@ -188,22 +197,87 @@ class StagedHybridRetriever:
                 
                 elif isinstance(value, dict):
                     # Range filter (e.g., {"$gte": 5, "$lte": 10})
-                    if "$gte" in value and node_value < value["$gte"]:
+                    if "$gte" in value and (node_value is None or node_value < value["$gte"]):
                         passes_filter = False
                         break
-                    if "$lte" in value and node_value > value["$lte"]:
+                    if "$lte" in value and (node_value is None or node_value > value["$lte"]):
                         passes_filter = False
                         break
-                    if "$gt" in value and node_value <= value["$gt"]:
+                    if "$gt" in value and (node_value is None or node_value <= value["$gt"]):
                         passes_filter = False
                         break
-                    if "$lt" in value and node_value >= value["$lt"]:
+                    if "$lt" in value and (node_value is None or node_value >= value["$lt"]):
                         passes_filter = False
                         break
                 
                 elif isinstance(value, list):
                     # List filter (value must be in list)
                     if node_value not in value:
+                        passes_filter = False
+                        break
+                
+                else:
+                    # Exact match
+                    if node_value != value:
+                        passes_filter = False
+                        break
+            
+            if passes_filter:
+                filtered_nodes.append(node)
+        
+        return filtered_nodes
+    
+    def _apply_pre_filters_as_post(self, nodes: List[Any], pre_filters: Dict[str, Any]) -> List[Any]:
+        """
+        Apply pre-filters as post-filters when direct Pinecone filtering is not available.
+        This is a fallback mechanism.
+        """
+        if not pre_filters:
+            return nodes
+        
+        filtered_nodes = []
+        
+        for node in nodes:
+            # Handle both NodeWithScore and raw node objects
+            actual_node = node.node if hasattr(node, 'node') else node
+            metadata = {}
+            
+            # Safely get metadata
+            if hasattr(actual_node, 'metadata'):
+                metadata = actual_node.metadata
+            elif isinstance(actual_node, dict) and 'metadata' in actual_node:
+                metadata = actual_node['metadata']
+            
+            passes_filter = True
+            
+            for key, value in pre_filters.items():
+                node_value = metadata.get(key) if isinstance(metadata, dict) else None
+                
+                # Handle different filter types (same logic as post-filter)
+                if isinstance(value, list):
+                    # List filter (value must be in list)
+                    if node_value not in value:
+                        passes_filter = False
+                        break
+                
+                elif isinstance(value, dict):
+                    # Range filter
+                    if "$gte" in value and (node_value is None or node_value < value["$gte"]):
+                        passes_filter = False
+                        break
+                    if "$lte" in value and (node_value is None or node_value > value["$lte"]):
+                        passes_filter = False
+                        break
+                    if "$gt" in value and (node_value is None or node_value <= value["$gt"]):
+                        passes_filter = False
+                        break
+                    if "$lt" in value and (node_value is None or node_value >= value["$lt"]):
+                        passes_filter = False
+                        break
+                    if "$eq" in value and node_value != value["$eq"]:
+                        passes_filter = False
+                        break
+                    if "$in" in value and node_value not in value["$in"]:
                         passes_filter = False
                         break
                 
@@ -259,13 +333,27 @@ class StagedHybridRetriever:
         # Get more candidates for post-filtering
         search_top_k = top_k * 3 if config.enable_post_filter else top_k
         
-        # Create retriever with optional metadata filter
+        # NOTE: LlamaIndex's as_retriever() doesn't support Pinecone metadata filters directly
+        # For now, we'll retrieve without pre-filtering and rely on post-filtering
+        # In production, you'd use Pinecone's query() method directly with filters
+        
+        if pinecone_filter and metrics.used_pre_filter:
+            # Log that we detected filters but can't apply them yet
+            print(f"[Stage 2] Note: Pre-filters detected but not applied to vector search (requires direct Pinecone API)")
+            print(f"[Stage 2] Falling back to standard retrieval + post-filtering")
+        
+        # Create retriever without metadata filter (standard LlamaIndex)
         retriever = self.vector_index.as_retriever(
-            similarity_top_k=search_top_k,
-            filters=pinecone_filter  # Pinecone native filtering
+            similarity_top_k=search_top_k
         )
         
         nodes = retriever.retrieve(query)
+        
+        # If we had pre-filters, apply them as post-filters instead
+        if pinecone_filter and metrics.used_pre_filter:
+            # Convert pre-filters to post-filter format and apply
+            nodes = self._apply_pre_filters_as_post(nodes, config.pre_filters)
+            print(f"[Stage 2] Applied pre-filters as post-filters, {len(nodes)} nodes remaining")
         
         metrics.vector_search_latency_ms = (time.time() - vector_search_start) * 1000
         metrics.pre_filter_count = len(nodes)
