@@ -73,6 +73,123 @@ class RepositoryIngestion:
         self.pinecone_index = pc.Index(index_name)
         self.vector_store = PineconeVectorStore(pinecone_index=self.pinecone_index)
     
+    def _detect_file_type(self, file_path: str, content: str) -> str:
+        """Detect file type for pre-filtering (Stage 1 - indexed)."""
+        path_lower = file_path.lower()
+        
+        # Test files
+        if 'test' in path_lower or 'spec' in path_lower or '__tests__' in path_lower:
+            return 'test'
+        
+        # Configuration files
+        if any(name in path_lower for name in ['config', 'settings', '.env', '.json', '.yaml', '.yml', '.toml', '.ini']):
+            return 'config'
+        
+        # Build/deployment files
+        if any(name in path_lower for name in ['dockerfile', 'makefile', 'package.json', 'requirements.txt', 'setup.py', 'build', 'deploy']):
+            return 'build'
+        
+        # Documentation
+        if path_lower.endswith('.md') or 'readme' in path_lower or 'docs' in path_lower:
+            return 'docs'
+        
+        # Code files (default)
+        code_extensions = ['.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.cpp', '.c', '.go', '.rs', '.rb', '.php', '.swift', '.kt']
+        if any(path_lower.endswith(ext) for ext in code_extensions):
+            return 'code'
+        
+        return 'other'
+    
+    def _detect_language(self, file_path: str) -> str:
+        """Detect programming language for pre-filtering (Stage 1 - indexed)."""
+        ext = os.path.splitext(file_path)[1].lower()
+        
+        language_map = {
+            '.py': 'python',
+            '.js': 'javascript',
+            '.jsx': 'javascript',
+            '.ts': 'typescript',
+            '.tsx': 'typescript',
+            '.java': 'java',
+            '.cpp': 'cpp',
+            '.c': 'c',
+            '.go': 'go',
+            '.rs': 'rust',
+            '.rb': 'ruby',
+            '.php': 'php',
+            '.swift': 'swift',
+            '.kt': 'kotlin',
+            '.md': 'markdown',
+            '.json': 'json',
+            '.yaml': 'yaml',
+            '.yml': 'yaml',
+        }
+        
+        return language_map.get(ext, 'unknown')
+    
+    def _calculate_directory_depth(self, file_path: str) -> int:
+        """Calculate directory depth for pre-filtering (Stage 1 - indexed)."""
+        # Normalize path separators
+        normalized = file_path.replace('\\', '/')
+        # Count directory levels (0 = root)
+        depth = normalized.count('/')
+        return min(depth, 5)  # Cap at 5 for indexing efficiency
+    
+    def _categorize_file_size(self, content: str) -> str:
+        """Categorize file size for pre-filtering (Stage 1 - indexed)."""
+        size = len(content)
+        
+        if size < 1000:
+            return 'small'
+        elif size < 10000:
+            return 'medium'
+        else:
+            return 'large'
+    
+    def _calculate_complexity_score(self, content: str, language: str) -> int:
+        """Calculate code complexity heuristic for post-filtering (Stage 3 - non-indexed)."""
+        # Simple heuristic based on control flow keywords
+        complexity = 1
+        
+        # Count control flow statements
+        control_keywords = ['if', 'else', 'elif', 'for', 'while', 'switch', 'case', 'try', 'catch', 'except']
+        for keyword in control_keywords:
+            complexity += content.lower().count(f' {keyword} ') + content.lower().count(f'\n{keyword} ')
+        
+        # Normalize to 1-10 scale
+        return min(max(1, complexity // 5), 10)
+    
+    def _extract_code_features(self, content: str, language: str) -> dict:
+        """Extract code features for post-filtering (Stage 3 - non-indexed)."""
+        content_lower = content.lower()
+        
+        features = {
+            'has_class_definition': False,
+            'has_function_definition': False,
+            'has_imports': False,
+            'has_tests': False,
+            'word_count': len(content.split()),
+        }
+        
+        # Detect class definitions
+        if language == 'python':
+            features['has_class_definition'] = 'class ' in content
+            features['has_function_definition'] = 'def ' in content
+            features['has_imports'] = 'import ' in content or 'from ' in content
+            features['has_tests'] = 'test_' in content_lower or 'assert' in content_lower
+        elif language in ['javascript', 'typescript']:
+            features['has_class_definition'] = 'class ' in content
+            features['has_function_definition'] = 'function ' in content or '=>' in content
+            features['has_imports'] = 'import ' in content or 'require(' in content
+            features['has_tests'] = 'test(' in content_lower or 'describe(' in content_lower or 'it(' in content_lower
+        elif language == 'java':
+            features['has_class_definition'] = 'class ' in content or 'interface ' in content
+            features['has_function_definition'] = 'public ' in content or 'private ' in content
+            features['has_imports'] = 'import ' in content
+            features['has_tests'] = '@test' in content_lower or 'junit' in content_lower
+        
+        return features
+    
     def update_progress(self, stage: str, progress: int):
         """Update the current progress."""
         self.current_stage = stage
@@ -121,7 +238,7 @@ class RepositoryIngestion:
         documents = reader.load_data()
         print(f"Loaded {len(documents)} files")
         
-        # Clean up file paths and categorize files
+        # Clean up file paths and categorize files with RICH METADATA
         for doc in documents:
             if "file_path" in doc.metadata:
                 # Convert absolute path to relative path
@@ -131,9 +248,26 @@ class RepositoryIngestion:
                 clean_path = rel_path.replace("\\", "/")
                 doc.metadata["file_path"] = clean_path
                 
-                # Categorize file
+                # Get file content for analysis
+                content = doc.text
+                
+                # === STAGE 1: PRE-FILTER METADATA (Indexed in Pinecone) ===
+                doc.metadata["file_type"] = self._detect_file_type(clean_path, content)
+                doc.metadata["language"] = self._detect_language(clean_path)
+                doc.metadata["directory_depth"] = self._calculate_directory_depth(clean_path)
+                doc.metadata["file_size_category"] = self._categorize_file_size(content)
+                
+                # Legacy category (keep for backward compatibility)
                 ext = os.path.splitext(clean_path)[1].lower()
                 doc.metadata["file_category"] = "code" if ext in ['.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.cpp', '.c', '.go', '.rs'] else "docs"
+                
+                # === STAGE 3: POST-FILTER METADATA (Non-indexed) ===
+                language = doc.metadata["language"]
+                code_features = self._extract_code_features(content, language)
+                doc.metadata.update(code_features)
+                doc.metadata["complexity_score"] = self._calculate_complexity_score(content, language)
+                
+                print(f"Processed: {clean_path} | Type: {doc.metadata['file_type']} | Lang: {language} | Depth: {doc.metadata['directory_depth']}")
 
         # Chunk the code using TokenTextSplitter with optimized parameters for depth
         splitter = TokenTextSplitter(
@@ -174,6 +308,7 @@ class RepositoryIngestion:
                 print(f"Error calculating lines for node: {e}")
                 
         print(f"Created {len(nodes)} chunks. Line numbers calculated for {success_count}/{len(nodes)} chunks.")
+        print(f"Metadata enrichment complete: {len(nodes)} chunks with Stage 1 (indexed) + Stage 3 (non-indexed) filters")
         
         return nodes
     

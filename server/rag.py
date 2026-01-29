@@ -1,4 +1,5 @@
 import os
+import asyncio
 from typing import List, Dict, Any
 from llama_index.core import VectorStoreIndex, PromptTemplate, Settings
 from llama_index.llms.groq import Groq
@@ -303,35 +304,42 @@ class RAGQueryEngine:
             else:
                 top_k = 4  # Reduced from 5
             
-            # 4. Optimized single-pass retrieval (ONLY 1 API call)
-            # A. Semantic Search (Vector)
-            retriever = self.index.as_retriever(similarity_top_k=top_k * 2) # Get more candidates for fusion
-            semantic_nodes = retriever.retrieve(rewritten_query)
+            # 4. STAGED HYBRID FILTERING (Production-grade retrieval)
+            from staged_filter import StagedHybridRetriever, create_filter_config_from_dict
             
-            # B. Keyword Search (BM25-like)
-            # We need to access the underlying docstore or nodes for keyword search
-            # Since Pinecone doesn't support direct keyword search easily without metadata,
-            # we'll use the results from semantic search + cache or just rely on semantic for now if full store isn't available.
-            # However, to be truly hybrid, we should ideally query Pinecone with hybrid (sparse-dense) if configured.
-            # Given the constraints and existing code, we will iterate on the *retrieved* semantic nodes and potentially
-            # some expanded context if we had a full local store, but here we will focus on Reranking the semantic results first.
+            # Extract filter configuration from processed query
+            filter_dict = processed.get('filter_config', {})
+            filter_config = create_filter_config_from_dict(filter_dict)
             
-            # actually, let's just stick to the plan: "Enhance ... with advanced techniques"
-            # We will use the HybridRetriever to Rerank the semantic nodes we got.
-            # AND if we can, we should try to fetch a bit more.
+            # Log filter configuration
+            if filter_config.pre_filters:
+                print(f"[Staged Filtering] Pre-filters: {filter_config.pre_filters}")
+            if filter_config.post_filters:
+                print(f"[Staged Filtering] Post-filters: {filter_config.post_filters}")
             
-            # Let's use the local file text for keyword search if we considered them "loaded", 
-            # but we only have vector store index. 
-            # So we will proceed with: Retrieve -> Rerank (using HybridRetriever logic).
+            # Create staged retriever
+            staged_retriever = StagedHybridRetriever(
+                self.index,
+                self.pinecone_index
+            )
             
-            # Extract nodes from NodeWithScore objects
-            semantic_node_tuples = [(n.node, n.score) for n in semantic_nodes]
+            # Execute three-stage retrieval
+            nodes, filter_metrics = staged_retriever.retrieve(
+                rewritten_query,
+                filter_config,
+                top_k=top_k * 2  # Get more candidates for reranking
+            )
             
-            # In a true hybrid setup with a local docstore, we would do a separate keyword search over all docs.
-            # Since we are serverless/pinecone only, we can't easily iterate all docs for BM25 without fetching them.
-            # So we will use the "Rerank" capability of our HybridRetriever to refine the Semantic results.
+            # Log performance metrics
+            print(f"[Performance] Staged retrieval completed in {filter_metrics.total_latency_ms:.1f}ms "
+                  f"(Pre: {filter_metrics.pre_filter_latency_ms:.1f}ms, "
+                  f"Vector: {filter_metrics.vector_search_latency_ms:.1f}ms, "
+                  f"Post: {filter_metrics.post_filter_latency_ms:.1f}ms)")
             
-            # C. Reranking
+            # Apply existing hybrid reranking for final refinement
+            semantic_node_tuples = [(n.node, n.score) for n in nodes]
+            
+            # Rerank with existing HybridRetriever logic
             reranked_tuples = self.hybrid_retriever.rerank_by_relevance(
                 semantic_node_tuples, 
                 query_text, 
@@ -463,13 +471,37 @@ class RAGQueryEngine:
             else:
                 top_k = 5
             
-            # 4. Async Retrieval (Run sync retrieval in thread pool)
-            import asyncio
-            retriever = self.index.as_retriever(similarity_top_k=top_k * 2)
-            nodes = await asyncio.to_thread(retriever.retrieve, rewritten_query)
+            # 4. STAGED HYBRID FILTERING (Async version)
+            from staged_filter import StagedHybridRetriever, create_filter_config_from_dict
             
-            # --- START HYBRID RERANKING ---
-            # Extract nodes
+            # Extract filter configuration
+            filter_dict = processed.get('filter_config', {})
+            filter_config = create_filter_config_from_dict(filter_dict)
+            
+            # Log filter configuration
+            if filter_config.pre_filters:
+                print(f"[Staged Filtering] Pre-filters: {filter_config.pre_filters}")
+            if filter_config.post_filters:
+                print(f"[Staged Filtering] Post-filters: {filter_config.post_filters}")
+            
+            # Create staged retriever
+            staged_retriever = StagedHybridRetriever(
+                self.index,
+                self.pinecone_index
+            )
+            
+            # Execute three-stage retrieval (run in thread pool for async)
+            nodes, filter_metrics = await asyncio.to_thread(
+                staged_retriever.retrieve,
+                rewritten_query,
+                filter_config,
+                top_k * 2
+            )
+            
+            # Log performance
+            print(f"[Performance] Async staged retrieval: {filter_metrics.total_latency_ms:.1f}ms")
+            
+            # Apply hybrid reranking
             semantic_node_tuples = [(n.node, n.score) for n in nodes]
             
             # Rerank
@@ -485,7 +517,6 @@ class RAGQueryEngine:
             # Reconstruct
             from llama_index.core.schema import NodeWithScore
             nodes = [NodeWithScore(node=t[0], score=t[1]) for t in final_top_k_tuples]
-            # --- END HYBRID RERANKING ---
             
             # Construct Context
             context_text = "\n\n".join([n.get_content() for n in nodes])

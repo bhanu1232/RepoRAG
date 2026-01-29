@@ -4,7 +4,7 @@ Handles query intent detection, expansion, and entity extraction.
 """
 
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 from enum import Enum
 
 
@@ -230,6 +230,147 @@ class QueryProcessor:
         
         return rewritten
     
+    def extract_filter_hints(self, query: str) -> Dict[str, Any]:
+        """
+        Extract filter hints from natural language query.
+        
+        Examples:
+            "Python authentication code" -> language: python, file_type: code
+            "test files for login" -> file_type: test
+            "main configuration" -> directory_depth: 0-1, file_type: config
+        """
+        query_lower = query.lower()
+        hints = {
+            'languages': [],
+            'file_types': [],
+            'directory_preference': None,
+            'code_features': {}
+        }
+        
+        # Language detection
+        language_keywords = {
+            'python': ['python', '.py', 'py'],
+            'javascript': ['javascript', 'js', '.js'],
+            'typescript': ['typescript', 'ts', '.ts'],
+            'java': ['java', '.java'],
+            'cpp': ['c++', 'cpp', '.cpp'],
+            'go': ['golang', 'go', '.go'],
+            'rust': ['rust', '.rs'],
+        }
+        
+        for lang, keywords in language_keywords.items():
+            if any(kw in query_lower for kw in keywords):
+                hints['languages'].append(lang)
+        
+        # File type detection
+        if any(word in query_lower for word in ['test', 'tests', 'testing', 'spec']):
+            hints['file_types'].append('test')
+        elif any(word in query_lower for word in ['config', 'configuration', 'settings']):
+            hints['file_types'].append('config')
+        elif any(word in query_lower for word in ['doc', 'docs', 'documentation', 'readme']):
+            hints['file_types'].append('docs')
+        elif any(word in query_lower for word in ['build', 'deploy', 'dockerfile', 'makefile']):
+            hints['file_types'].append('build')
+        elif any(word in query_lower for word in ['code', 'implementation', 'function', 'class']):
+            hints['file_types'].append('code')
+        
+        # Directory depth preference
+        if any(word in query_lower for word in ['main', 'root', 'top-level', 'entry']):
+            hints['directory_preference'] = 'shallow'  # 0-2 depth
+        elif any(word in query_lower for word in ['nested', 'deep', 'internal']):
+            hints['directory_preference'] = 'deep'  # 3+ depth
+        
+        # Code features (for post-filtering)
+        if any(word in query_lower for word in ['class', 'classes']):
+            hints['code_features']['has_class_definition'] = True
+        if any(word in query_lower for word in ['function', 'functions', 'method', 'methods']):
+            hints['code_features']['has_function_definition'] = True
+        
+        return hints
+    
+    def extract_filter_config(self, query: str, intent: QueryIntent) -> Dict[str, Any]:
+        """
+        Extract complete filter configuration from query and intent.
+        
+        Returns dict suitable for StagedFilterConfig:
+            {
+                "pre_filters": {...},  # Indexed filters
+                "post_filters": {...}, # Non-indexed filters
+                "enable_pre_filter": True,
+                "enable_post_filter": True
+            }
+        """
+        hints = self.extract_filter_hints(query)
+        
+        config = {
+            'pre_filters': {},
+            'post_filters': {},
+            'enable_pre_filter': True,
+            'enable_post_filter': True
+        }
+        
+        # === PRE-FILTERS (Indexed in Pinecone) ===
+        
+        # Language filter
+        if hints['languages']:
+            if len(hints['languages']) == 1:
+                config['pre_filters']['language'] = hints['languages'][0]
+            else:
+                config['pre_filters']['language'] = hints['languages']
+        
+        # File type filter
+        if hints['file_types']:
+            if len(hints['file_types']) == 1:
+                config['pre_filters']['file_type'] = hints['file_types'][0]
+            else:
+                config['pre_filters']['file_type'] = hints['file_types']
+        
+        # Directory depth filter
+        if hints['directory_preference'] == 'shallow':
+            config['pre_filters']['directory_depth'] = {"$lte": 2}
+        elif hints['directory_preference'] == 'deep':
+            config['pre_filters']['directory_depth'] = {"$gte": 3}
+        
+        # Intent-based pre-filters
+        if intent == QueryIntent.IMPLEMENTATION:
+            # Prefer code files
+            if 'file_type' not in config['pre_filters']:
+                config['pre_filters']['file_type'] = 'code'
+        
+        elif intent == QueryIntent.DEBUGGING:
+            # Include both code and test files
+            if 'file_type' not in config['pre_filters']:
+                config['pre_filters']['file_type'] = ['code', 'test']
+        
+        elif intent == QueryIntent.ARCHITECTURE:
+            # Prefer root-level files
+            if 'directory_depth' not in config['pre_filters']:
+                config['pre_filters']['directory_depth'] = {"$lte": 2}
+        
+        # === POST-FILTERS (Non-indexed) ===
+        
+        # Code features
+        if hints['code_features']:
+            config['post_filters'].update(hints['code_features'])
+        
+        # Intent-based post-filters
+        if intent == QueryIntent.IMPLEMENTATION:
+            # Prefer files with function definitions
+            if 'has_function_definition' not in config['post_filters']:
+                config['post_filters']['has_function_definition'] = True
+        
+        elif intent == QueryIntent.DEBUGGING:
+            # No specific post-filter for debugging
+            pass
+        
+        # Disable filters if none were extracted
+        if not config['pre_filters']:
+            config['enable_pre_filter'] = False
+        if not config['post_filters']:
+            config['enable_post_filter'] = False
+        
+        return config
+    
     def process(self, query: str, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict:
         """
         Main processing pipeline for queries.
@@ -249,6 +390,9 @@ class QueryProcessor:
         # Rewrite query for better retrieval
         rewritten_query = self.rewrite_query(expanded_query, intent, entities)
         
+        # Extract filter configuration
+        filter_config = self.extract_filter_config(query, intent)
+        
         # Build context from chat history
         context = ""
         if chat_history:
@@ -266,4 +410,6 @@ class QueryProcessor:
             'intent': intent,
             'entities': entities,
             'context': context,
+            'filter_config': filter_config,  # NEW: Filter configuration
         }
+
