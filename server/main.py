@@ -21,6 +21,7 @@ app.add_middleware(
         "http://localhost:5173", 
         "https://reporag.vercel.app", 
         "https://repo-rag.vercel.app",
+        "https://reporag-2.onrender.com",
     ],
     allow_origin_regex=r'https://.*\.vercel\.app',
     allow_credentials=True,
