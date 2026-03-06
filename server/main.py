@@ -187,7 +187,7 @@ async def get_progress():
             progress_data["error"] = indexing_status["error"]
         return progress_data
     
-    # If indexing completed, return result
+    # If indexing completed successfully, return result
     if indexing_status["result"]:
         return {
             "progress": 100,
@@ -196,25 +196,49 @@ async def get_progress():
             "result": indexing_status["result"]
         }
     
-    # Default: ready state
+    # If there was an error (task failed), surface it to the frontend
+    if indexing_status["error"]:
+        return {
+            "progress": 0,
+            "stage": "Error",
+            "in_progress": False,
+            "error": indexing_status["error"]
+        }
+    
+    # Default: ready state (no indexing has been attempted yet)
     return {"progress": 0, "stage": "Ready", "in_progress": False}
 
 def run_indexing_task(repo_url: str):
     """Background task to run repository indexing."""
-    global indexing_status
+    global indexing_status, ingestion_service
     try:
         print(f"Background indexing started for: {repo_url}")
-        service = get_ingestion_service()
-        print("Ingestion service initialized, starting indexing...")
         
-        result = service.index_repository(repo_url)
+        # Directly initialize ingestion service to avoid HTTPException masking real errors
+        if not ingestion_service:
+            try:
+                from ingestion import RepositoryIngestion
+                embed_model = get_shared_embedding()
+                ingestion_service = RepositoryIngestion(embed_model=embed_model)
+                print("Ingestion Service initialized.")
+            except Exception as init_err:
+                error_msg = f"Failed to initialize ingestion service: {str(init_err)}"
+                print(error_msg)
+                import traceback
+                traceback.print_exc()
+                indexing_status["error"] = error_msg
+                indexing_status["result"] = None
+                return
+        
+        print("Ingestion service ready, starting indexing...")
+        result = ingestion_service.index_repository(repo_url)
         
         if result["success"]:
             print(f"Indexing completed successfully: {result}")
             indexing_status["result"] = result
             indexing_status["error"] = None
             
-            # Pre-initialize RAG service so it's ready for the fast chat
+            # Pre-initialize RAG service so it's ready for chat
             print("Pre-loading RAG service for instant response...")
             try:
                 get_rag_service()
