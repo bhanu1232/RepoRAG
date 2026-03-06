@@ -3,7 +3,7 @@ import asyncio
 from typing import List, Dict, Any
 from llama_index.core import VectorStoreIndex, PromptTemplate, Settings
 from llama_index.llms.groq import Groq
-from llama_index.embeddings.gemini import GeminiEmbedding
+from custom_embedding import GeminiRESTEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from dotenv import load_dotenv
@@ -36,8 +36,8 @@ class RAGQueryEngine:
             self.embed_model = embed_model
         else:
             # Uses GOOGLE_API_KEY from environment
-            self.embed_model = GeminiEmbedding(
-                model_name="models/embedding-001"
+            self.embed_model = GeminiRESTEmbedding(
+                model_name="text-embedding-004"
             )
         
         # Configure global settings to avoid local defaults

@@ -5,7 +5,7 @@ from typing import List
 from git import Repo
 from llama_index.core import SimpleDirectoryReader, Document, Settings
 from llama_index.core.node_parser import TokenTextSplitter
-from llama_index.embeddings.gemini import GeminiEmbedding
+from custom_embedding import GeminiRESTEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
 from pinecone import Pinecone, ServerlessSpec
@@ -23,8 +23,8 @@ class RepositoryIngestion:
         if embed_model:
             self.embed_model = embed_model
         else:
-            self.embed_model = GeminiEmbedding(
-                 model_name="models/embedding-001"
+            self.embed_model = GeminiRESTEmbedding(
+                 model_name="text-embedding-004"
             )
         
         # Configure global settings
