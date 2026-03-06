@@ -76,7 +76,7 @@ def get_shared_embedding():
         try:
             from llama_index.embeddings.gemini import GeminiEmbedding
             # Uses GOOGLE_API_KEY from environment
-            shared_embed_model = GeminiEmbedding(model_name="models/text-embedding-004")
+            shared_embed_model = GeminiEmbedding(model_name="models/embedding-001")
             print("Shared Embedding Model initialized.")
         except Exception as e:
             print(f"Error initializing shared embedding: {e}")
