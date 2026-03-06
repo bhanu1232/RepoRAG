@@ -24,7 +24,7 @@ class RepositoryIngestion:
             self.embed_model = embed_model
         else:
             self.embed_model = GeminiRESTEmbedding(
-                 model_name="text-embedding-004"
+                 model_name="embedding-001"
             )
         
         # Configure global settings

@@ -25,7 +25,6 @@ class GeminiRESTEmbedding(BaseEmbedding):
         **kwargs: Any,
     ):
         resolved_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
-        # Strip "models/" prefix if passed, we handle it ourselves
         clean_model = model_name.replace("models/", "")
         super().__init__(
             model_name=model_name,
@@ -35,9 +34,10 @@ class GeminiRESTEmbedding(BaseEmbedding):
         )
 
     def _embed(self, text: str) -> List[float]:
-        """Call Google REST API v1 to get embedding for text."""
+        # Use v1beta REST — v1beta gRPC (llama_index) fails, but v1beta REST works fine.
+        # embedding-001 is supported in v1beta; text-embedding-004 needs extra API project access.
         url = (
-            f"https://generativelanguage.googleapis.com/v1/models/"
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self.rest_model_name}:embedContent"
         )
         payload = {
