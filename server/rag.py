@@ -37,7 +37,7 @@ class RAGQueryEngine:
         else:
             # Uses GOOGLE_API_KEY from environment
             self.embed_model = GeminiEmbedding(
-                model_name="models/text-embedding-004"
+                model_name="models/embedding-001"
             )
         
         # Configure global settings to avoid local defaults

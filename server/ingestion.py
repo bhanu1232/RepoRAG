@@ -24,7 +24,7 @@ class RepositoryIngestion:
             self.embed_model = embed_model
         else:
             self.embed_model = GeminiEmbedding(
-                 model_name="models/text-embedding-004"
+                 model_name="models/embedding-001"
             )
         
         # Configure global settings
@@ -46,7 +46,7 @@ class RepositoryIngestion:
         existing_indexes = pc.list_indexes().names()
         
         should_create = True
-        target_dimension = 768  # Dimension for models/text-embedding-004
+        target_dimension = 768  # Dimension for models/embedding-001
         
         if index_name in existing_indexes:
             index_info = pc.describe_index(index_name)
