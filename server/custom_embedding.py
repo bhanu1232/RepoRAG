@@ -7,20 +7,20 @@ from pydantic import Field
 
 class GeminiRESTEmbedding(BaseEmbedding):
     """
-    Custom Gemini embedding that calls the REST API v1 directly.
+    Custom Gemini embedding using the REST API (v1beta) directly.
 
-    This bypasses llama_index.embeddings.gemini which is hardcoded to use
-    the v1beta gRPC endpoint — which does NOT support embedContent for any model.
+    This bypasses llama_index.embeddings.gemini which uses v1beta gRPC
+    and has broken model support. REST v1beta works fine.
 
-    Uses: https://generativelanguage.googleapis.com/v1/models/{model}:embedContent
+    Supported model for this API key: gemini-embedding-001 (3072 dims)
     """
 
     api_key: str = Field(default="", description="Google API key")
-    rest_model_name: str = Field(default="text-embedding-004", description="Model name without 'models/' prefix")
+    rest_model_name: str = Field(default="gemini-embedding-001", description="Model name without models/ prefix")
 
     def __init__(
         self,
-        model_name: str = "text-embedding-004",
+        model_name: str = "gemini-embedding-001",
         api_key: Optional[str] = None,
         **kwargs: Any,
     ):

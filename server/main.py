@@ -75,7 +75,7 @@ def get_shared_embedding():
         print("Initializing Shared Embedding Model...")
         try:
             from custom_embedding import GeminiRESTEmbedding
-            shared_embed_model = GeminiRESTEmbedding(model_name="embedding-001")
+            shared_embed_model = GeminiRESTEmbedding(model_name="gemini-embedding-001")
             print("Shared Embedding Model initialized.")
         except Exception as e:
             print(f"Error initializing shared embedding: {e}")
