@@ -38,8 +38,8 @@
 
 ### Server (Backend)
 -   **Framework**: FastAPI (Python)
--   **AI/LLM**: Groq (Llama 3 via `llama-index-llms-groq`)
--   **Embeddings**: Google Gemini (`llama-index-embeddings-gemini`)
+-   **AI/LLM**: Groq LLM Gateway (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `llama-3.3-70b-versatile` with automatic failover)
+-   **Embeddings**: Google Gemini REST Embeddings (`gemini-embedding-001` - 3,072 dimensions)
 -   **Vector Database**: Pinecone (`pinecone-client`)
 -   **Framework**: LlamaIndex (RAG orchestration)
 -   **Utilities**: GitPython (Repo Cloning), Pydantic
@@ -48,17 +48,17 @@
 
 1.  **Ingestion Layer**:
     -   Clones the target GitHub repository.
-    -   Chunks code files into semantic segments.
-    -   Generates embeddings using Google Gemini.
-    -   Upserts vectors to the Pinecone database.
+    -   Chunks code files into AST-aware semantic segments with line ranges.
+    -   Generates high-dimensional embeddings using Google Gemini REST.
+    -   Upserts enriched vectors to Pinecone with real-time telemetry (live stopwatch, remaining time estimates, step-by-step pipeline).
 
 2.  **Retrieval Layer**:
-    -   **Hybrid Search**: Fetches relevant chunks using both dense (vector) and sparse (keyword) methods.
-    -   **Reranking**: Uses a custom algorithm to score and re-order chunks based on the query intent (e.g., prioritizing implementation details for coding questions).
+    -   **Hybrid Search**: Fetches relevant chunks using 3-stage hybrid filtering (Pinecone metadata pre-filter + vector search + AST complexity post-filter).
+    -   **Reranking**: Uses a custom algorithm to score and re-order chunks based on query intent (e.g., prioritizing implementation details for coding questions).
 
 3.  **Generation Layer**:
-    -   Constructs an enhanced prompt with the most relevant code chunks.
-    -   Uses Groq's Llama 3 model to generate a high-quality, engineer-level response.
+    -   Constructs an enhanced prompt with intent-specific instructions and retrieved code chunks.
+    -   Uses Groq's high-speed inference engine to generate engineer-grade responses with full code examples, diagrams, and line citations.
 
 ## 🚀 Getting Started
 

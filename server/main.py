@@ -173,12 +173,23 @@ async def health_check():
 
 @app.get("/progress")
 async def get_progress():
-    """Get current indexing progress and status."""
+    """Get current indexing progress, telemetry and status."""
     # Check global indexing status first
     if indexing_status["in_progress"]:
+        telemetry = ingestion_service.get_progress_status() if ingestion_service else {
+            "progress": 0,
+            "stage": "Initializing background task...",
+            "step": 1,
+            "total_steps": 4,
+            "elapsed_seconds": 0,
+            "estimated_remaining_seconds": None,
+            "total_files": 0,
+            "total_nodes": 0,
+            "processed_nodes": 0,
+            "is_large_repo": False,
+        }
         progress_data = {
-            "progress": ingestion_service.progress if ingestion_service else 0,
-            "stage": ingestion_service.current_stage if ingestion_service else "Initializing",
+            **telemetry,
             "in_progress": True,
             "repo_url": indexing_status["repo_url"]
         }
@@ -191,6 +202,8 @@ async def get_progress():
         return {
             "progress": 100,
             "stage": "Complete",
+            "step": 4,
+            "total_steps": 4,
             "in_progress": False,
             "result": indexing_status["result"]
         }
@@ -200,12 +213,20 @@ async def get_progress():
         return {
             "progress": 0,
             "stage": "Error",
+            "step": 0,
+            "total_steps": 4,
             "in_progress": False,
             "error": indexing_status["error"]
         }
     
     # Default: ready state (no indexing has been attempted yet)
-    return {"progress": 0, "stage": "Ready", "in_progress": False}
+    return {
+        "progress": 0, 
+        "stage": "Ready", 
+        "step": 0, 
+        "total_steps": 4, 
+        "in_progress": False
+    }
 
 def run_indexing_task(repo_url: str):
     """Background task to run repository indexing."""
@@ -378,13 +399,6 @@ async def generate(request: GenerateRequest):
     try:
         from llama_index.llms.groq import Groq
         
-        # Initialize Groq LLM
-        llm = Groq(
-            model="llama-3.3-70b-versatile",
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.1,
-        )
-        
         # Build prompt
         prompt = f"""You are an elite Senior Software Engineer and Architect analyzing a codebase.
 
@@ -401,9 +415,38 @@ Provide a detailed, technical answer based ONLY on the provided context. Include
 
 If the context doesn't contain relevant information, say so."""
         
-        # Generate response
-        response = llm.complete(prompt)
+        # Try candidate models in order with automatic fallback
+        models_to_try = [
+            os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+            "qwen/qwen3.8-27b",
+            "openai/gpt-oss-20b",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+        ]
         
+        response = None
+        last_error = None
+        for model in models_to_try:
+            try:
+                llm = Groq(
+                    model=model,
+                    api_key=os.getenv("GROQ_API_KEY"),
+                    temperature=0.1,
+                )
+                response = llm.complete(prompt)
+                break
+            except Exception as e:
+                err_str = str(e)
+                last_error = e
+                if "decommissioned" in err_str or "not_found" in err_str or "400" in err_str or "404" in err_str:
+                    print(f"Generate model {model} decommissioned/unavailable. Trying fallback...")
+                    continue
+                else:
+                    raise e
+                    
+        if not response:
+            raise last_error or HTTPException(status_code=500, detail="Failed to generate response with available models.")
+            
         return {
             "answer": str(response),
             "confidence": {"score": 0.85, "level": "high"},

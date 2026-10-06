@@ -9,6 +9,7 @@ from custom_embedding import GeminiRESTEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.core import VectorStoreIndex, StorageContext
 from pinecone import Pinecone, ServerlessSpec
+import time
 from dotenv import load_dotenv
 import gc
 
@@ -30,11 +31,16 @@ class RepositoryIngestion:
         # Configure global settings
         Settings.embed_model = self.embed_model
 
-        # Progress tracking
+        # Progress and telemetry tracking
         self.progress = 0
-        self.current_stage = ""
+        self.current_stage = "Ready"
+        self.current_step = 0
+        self.total_steps = 4
+        self.start_time = None
         self.total_files = 0
         self.processed_files = 0
+        self.total_nodes = 0
+        self.processed_nodes = 0
         
         # Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
@@ -190,11 +196,40 @@ class RepositoryIngestion:
         
         return features
     
-    def update_progress(self, stage: str, progress: int):
-        """Update the current progress."""
+    def update_progress(self, stage: str, progress: int, step: int = 1, current_node: int = 0, total_nodes: int = 0):
+        """Update the current progress and telemetry."""
         self.current_stage = stage
-        self.progress = progress
-        print(f"Progress: {progress}% - {stage}")
+        self.progress = min(100, max(0, progress))
+        self.current_step = step
+        if current_node > 0:
+            self.processed_nodes = current_node
+        if total_nodes > 0:
+            self.total_nodes = total_nodes
+        print(f"Progress: {self.progress}% [Step {self.current_step}/4] - {stage}")
+
+    def get_progress_status(self) -> dict:
+        """Return structured telemetry for live client polling."""
+        elapsed = int(time.time() - self.start_time) if self.start_time else 0
+        estimated_remaining = None
+        
+        if self.progress > 5 and self.progress < 100 and elapsed > 0:
+            total_estimated = (elapsed / (self.progress / 100))
+            estimated_remaining = max(1, int(total_estimated - elapsed))
+            
+        is_large = self.total_files > 40 or self.total_nodes > 80 or elapsed > 20
+        
+        return {
+            "progress": self.progress,
+            "stage": self.current_stage,
+            "step": self.current_step,
+            "total_steps": self.total_steps,
+            "elapsed_seconds": elapsed,
+            "estimated_remaining_seconds": estimated_remaining,
+            "total_files": self.total_files,
+            "total_nodes": self.total_nodes,
+            "processed_nodes": self.processed_nodes,
+            "is_large_repo": is_large,
+        }
     
     def clear_index(self):
         """Clear all vectors from the Pinecone index."""
@@ -316,28 +351,36 @@ class RepositoryIngestion:
         """Main method to clone, chunk, and index a repository."""
         repo_path = None
         
-        # Reset progress at start
+        # Reset progress and start timer
+        self.start_time = time.time()
         self.progress = 0
-        self.current_stage = "Starting"
+        self.current_stage = "Initializing index environment"
+        self.current_step = 1
+        self.total_files = 0
+        self.total_nodes = 0
+        self.processed_nodes = 0
         
         try:
-            # Stage 1: Clear existing data (0-10%)
-            self.update_progress("Preparing index", 0)
+            # Step 1: Clear existing data (0-10%)
+            self.update_progress("Cleaning up previous index & preparing vector store", 5, step=1)
             self.clear_index()
-            self.update_progress("Index cleared", 10)
+            self.update_progress("Index space ready", 10, step=1)
             
-            # Stage 2: Clone the repository (10-30%)
-            self.update_progress("Cloning repository", 15)
+            # Step 2: Clone the repository (10-30%)
+            self.update_progress("Cloning Git repository & analyzing branches", 15, step=2)
             repo_path = self.clone_repository(repo_url)
-            self.update_progress("Repository cloned", 30)
+            self.update_progress("Repository cloned successfully", 30, step=2)
             
-            # Stage 3: Load and chunk the code (30-60%)
-            self.update_progress("Processing files", 35)
+            # Step 3: Load and chunk the code (30-60%)
+            self.update_progress("Parsing source files & generating AST chunks", 35, step=3)
             nodes = self.load_and_chunk_code(repo_path)
-            self.update_progress("Files processed", 60)
             
-            # Stage 4: Create embeddings and index (60-100%)
-            self.update_progress("Initializing index", 65)
+            self.total_nodes = len(nodes)
+            self.total_files = len(set([node.metadata.get("file_path", "") for node in nodes]))
+            self.update_progress(f"Extracted {self.total_nodes} chunks from {self.total_files} files", 60, step=3)
+            
+            # Step 4: Create embeddings and index (60-100%)
+            self.update_progress("Initializing Gemini embedding model & vector pipeline", 65, step=4)
             
             storage_context = StorageContext.from_defaults(
                 vector_store=self.vector_store
@@ -350,45 +393,50 @@ class RepositoryIngestion:
                 embed_model=self.embed_model,
             )
             
-            # Process nodes ONE AT A TIME for Railway's extreme memory constraints
-            batch_size = 1  # Absolute minimum to prevent OOM on Railway
+            # Process nodes in batches (50 provides a good balance of speed vs Railway memory)
+            batch_size = 50
             total_nodes = len(nodes)
             
-            print(f"Indexing {total_nodes} nodes individually (Railway memory optimization)...")
+            print(f"Indexing {total_nodes} nodes in batches of {batch_size}...")
             
             for i in range(0, total_nodes, batch_size):
                 batch_nodes = nodes[i : i + batch_size]
-                current_node = i + 1
+                current_node = min(i + len(batch_nodes), total_nodes)
                 
                 # Calculate progress (65% to 95%)
-                progress_percent = 65 + int(30 * (i / total_nodes))
-                self.update_progress(f"Indexing node {current_node}/{total_nodes}", progress_percent)
+                progress_percent = 65 + int(30 * (current_node / max(1, total_nodes)))
+                self.update_progress(
+                    f"Generating neural embeddings ({current_node}/{total_nodes} chunks)", 
+                    progress_percent, 
+                    step=4,
+                    current_node=current_node,
+                    total_nodes=total_nodes
+                )
                 
                 try:
                     index.insert_nodes(batch_nodes)
                 except Exception as e:
-                    print(f"Error indexing node {current_node}: {e}")
-                    # Log but continue with next node to salvage what we can
-                    print(f"Skipping node {current_node} and continuing...")
+                    print(f"Error indexing batch around node {current_node}: {e}")
+                    # Log but continue with next batch to salvage what we can
                     continue
                 
-                # Aggressive garbage collection after each node
-                if i % 5 == 0:  # Every 5 nodes
+                # Garbage collection
+                if i % 5 == 0:
                     gc.collect()
             
-            self.update_progress("Finalizing index", 95)
-            
-            self.update_progress("Complete", 100)
+            self.update_progress("Finalizing index & building neural graphs", 95, step=4)
+            self.update_progress("Repository indexing complete!", 100, step=4)
             
             return {
                 "success": True,
                 "message": "Repository indexed successfully",
-                "file_count": len(set([node.metadata.get("file_path", "") for node in nodes])),
-                "chunk_count": len(nodes)
+                "file_count": self.total_files,
+                "chunk_count": self.total_nodes,
+                "elapsed_seconds": int(time.time() - self.start_time)
             }
             
         except Exception as e:
-            self.update_progress("Error occurred", 0)
+            self.update_progress(f"Error occurred: {str(e)}", 0, step=0)
             import traceback
             traceback.print_exc()
             return {

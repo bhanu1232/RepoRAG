@@ -15,6 +15,16 @@ from hybrid_retriever import HybridRetriever
 load_dotenv()
 
 
+# Supported candidate models in order of priority (excluding deprecated models like llama3-8b-8192)
+FALLBACK_GROQ_MODELS = [
+    os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+]
+
+
 class RAGQueryEngine:
     """Enhanced RAG engine with advanced query processing and hybrid retrieval."""
     
@@ -23,13 +33,12 @@ class RAGQueryEngine:
         self.response_cache = {}
         self.cache_ttl = 300  # 5 minutes TTL
         
-        # Initialize Groq LLM
-        self.llm = Groq(
-            model="llama-3.1-8b-instant",
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=0.1,
-        )
-        self.current_model = "groq"
+        # Initialize Groq LLM with a modern supported model
+        self.current_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+        if self.current_model in ["llama3-8b-8192", "llama3-70b-8192", "llama-3-8b-8192", "llama-3-70b-8192", "groq"]:
+            self.current_model = "openai/gpt-oss-120b"
+            
+        self._init_llm(self.current_model)
         
         # Initialize Gemini Embedding (Cloud-based, Free Tier)
         if embed_model:
@@ -60,6 +69,59 @@ class RAGQueryEngine:
         # Initialize our new components
         self.query_processor = QueryProcessor()
         self.hybrid_retriever = HybridRetriever()
+
+    def _init_llm(self, model_name: str):
+        """Initialize or update the Groq LLM instance."""
+        self.current_model = model_name
+        self.llm = Groq(
+            model=model_name,
+            api_key=os.getenv("GROQ_API_KEY"),
+            temperature=0.1,
+        )
+        Settings.llm = self.llm
+
+    def _execute_llm_complete(self, prompt: str) -> str:
+        """Execute LLM completion with automatic fallback if decommissioned/unavailable."""
+        models_to_try = [self.current_model] + [m for m in FALLBACK_GROQ_MODELS if m != self.current_model]
+        last_error = None
+        for model in models_to_try:
+            try:
+                if self.current_model != model:
+                    print(f"[RAG] Switching model to fallback: {model}")
+                    self._init_llm(model)
+                res = self.llm.complete(prompt)
+                return str(res)
+            except Exception as e:
+                err_str = str(e)
+                print(f"[RAG] Model {model} failed: {err_str}")
+                last_error = e
+                # If decommissioned or not found, try next candidate
+                if "decommissioned" in err_str or "not_found" in err_str or "400" in err_str or "404" in err_str:
+                    continue
+                else:
+                    raise e
+        raise last_error or Exception("All Groq models failed to complete request.")
+
+    async def _execute_llm_acomplete(self, prompt: str) -> str:
+        """Execute async LLM completion with automatic fallback if decommissioned/unavailable."""
+        models_to_try = [self.current_model] + [m for m in FALLBACK_GROQ_MODELS if m != self.current_model]
+        last_error = None
+        for model in models_to_try:
+            try:
+                if self.current_model != model:
+                    print(f"[RAG] Switching async model to fallback: {model}")
+                    self._init_llm(model)
+                res = await self.llm.acomplete(prompt)
+                return str(res)
+            except Exception as e:
+                err_str = str(e)
+                print(f"[RAG] Async Model {model} failed: {err_str}")
+                last_error = e
+                if "decommissioned" in err_str or "not_found" in err_str or "400" in err_str or "404" in err_str:
+                    continue
+                else:
+                    raise e
+        raise last_error or Exception("All Groq models failed to complete async request.")
     
     
     def _get_intent_specific_instructions(self, intent: QueryIntent) -> str:
@@ -180,14 +242,14 @@ class RAGQueryEngine:
             "   |---------|----------|----------|\n"
             "   | Speed   | Fast     | Slow     |\n\n"
             "8. **VISUALIZATION (MERMAID)**:\n"
-            "   - Use Mermaid dictionaries for flows and architecture\n"
-            "   - Use `mermaid` language tag\n"
+            "   - Use `mermaid` language tag ONLY for valid Mermaid diagrams\n"
+            "   - IMPORTANT: ALWAYS wrap node text in double quotes if it contains parentheses, brackets, or spaces: e.g. A[\"Client (React)\"] --> B[\"API Gateway\"]\n"
+            "   - NEVER put markdown formatting (like **bold** or `code`) or HTML tags inside Mermaid node labels\n"
             "   - Example:\n"
             "   ```mermaid\n"
             "   graph TD\n"
-            "   A[Start] --> B{Check}\n"
-            "   B -->|Yes| C[Process]\n"
-            "   B -->|No| D[Stop]\n"
+            "   A[\"Client (React)\"] --> B[\"API Gateway\"]\n"
+            "   B --> C[\"Vector Engine\"]\n"
             "   ```\n\n"
             "9. **QUALITY CONTENT**:\n"
             "   - Explain WHAT the code does\n"
@@ -208,13 +270,33 @@ class RAGQueryEngine:
     def _calculate_confidence(self, sources: List[Dict], query: str, answer: str) -> Dict[str, Any]:
         """Calculate confidence score for the answer."""
         if not sources:
-            return {"score": 0.0, "level": "low", "reason": "No sources found"}
+            return {"score": 0.0, "level": "none", "reason": "No sources found"}
         
+        # Check if answer explicitly states no context was found
+        lower_ans = answer.lower()
+        if any(neg in lower_ans for neg in [
+            "the context doesn't contain", 
+            "the context does not contain", 
+            "no information found", 
+            "i could not find any relevant",
+            "i couldn't find any relevant",
+            "no relevant code found",
+            "not mentioned in the provided context",
+            "does not mention"
+        ]):
+            return {"score": 0.0, "level": "none", "reason": "LLM indicated no matching context"}
+
         # Factors for confidence calculation
-        avg_score = sum(s.get('score', 0) for s in sources) / len(sources) if sources else 0
+        valid_scores = [s.get('score', 0) for s in sources if s.get('score') is not None]
+        avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
         num_sources = len(sources)
-        code_sources = sum(1 for s in sources if 'code' in s.get('file', '').lower())
+        code_sources = sum(1 for s in sources if any(s.get('file', '').lower().endswith(ext) for ext in ['.py', '.js', '.jsx', '.ts', '.tsx', '.go', '.java', '.cpp', '.rs', '.c', '.h', '.rb', '.php']))
         
+        # If retrieved scores are very low (e.g. max < 0.25), consider it no match
+        max_score = max(valid_scores) if valid_scores else 0
+        if max_score < 0.20:
+            return {"score": 0.0, "level": "none", "reason": "Relevance score below minimum threshold"}
+
         # Calculate base confidence
         confidence = 0.0
         
@@ -225,7 +307,7 @@ class RAGQueryEngine:
             confidence += 0.3
         elif avg_score > 0.3:
             confidence += 0.2
-        else:
+        elif avg_score > 0.15:
             confidence += 0.1
         
         # Number of sources (30% weight)
@@ -233,7 +315,7 @@ class RAGQueryEngine:
             confidence += 0.3
         elif num_sources >= 3:
             confidence += 0.2
-        else:
+        elif num_sources >= 1:
             confidence += 0.1
         
         # Code source availability (30% weight)
@@ -251,9 +333,12 @@ class RAGQueryEngine:
         elif confidence >= 0.5:
             level = "medium"
             reason = "Good source coverage with relevant matches"
-        else:
+        elif confidence > 0.0:
             level = "low"
             reason = "Limited source relevance or coverage"
+        else:
+            level = "none"
+            reason = "No relevant matches found"
         
         return {
             "score": round(confidence, 2),
@@ -365,8 +450,8 @@ class RAGQueryEngine:
             # But our prompt string (lines 191) uses {query_str} and we manually format it here
             final_prompt = qa_template.format(context_str=context_text, query_str=rewritten_query)
             
-            # Single LLM Call
-            response_text = str(self.llm.complete(final_prompt))
+            # Single LLM Call with automatic fallback
+            response_text = self._execute_llm_complete(final_prompt)
             
             # Create a mock response object to match previous structure key expectation or just return text
             class MockResponse:
@@ -405,13 +490,24 @@ class RAGQueryEngine:
             # 6. Calculate confidence
             confidence = self._calculate_confidence(sources, query_text, str(response))
             
+            # If confidence is 0 or less, or no sources found, return "No result found"
+            if confidence.get("score", 0) <= 0.0 or not sources:
+                final_response = {
+                    "success": True,
+                    "answer": "No result found. I couldn't find any relevant code, functions, or documentation for your query in the indexed repository.",
+                    "sources": [],
+                    "confidence": {"score": 0.0, "level": "none", "reason": "No relevant matches found in codebase"},
+                    "intent": intent.value if hasattr(intent, 'value') else "general"
+                }
+                return final_response
+            
             # Build final response
             final_response = {
                 "success": True,
                 "answer": str(response),
                 "sources": sources,
                 "confidence": confidence,
-                "intent": intent.value
+                "intent": intent.value if hasattr(intent, 'value') else "general"
             }
             
             # 7. Cache the response for future use
@@ -522,9 +618,8 @@ class RAGQueryEngine:
             context_text = "\n\n".join([n.get_content() for n in nodes])
             final_prompt = qa_template.format(context_str=context_text, query_str=rewritten_query)
             
-            # 5. Async LLM Call
-            response_obj = await self.llm.acomplete(final_prompt)
-            response_text = str(response_obj)
+            # 5. Async LLM Call with automatic fallback
+            response_text = await self._execute_llm_acomplete(final_prompt)
             
             # Mock response structure for source extraction
             class MockResponse:

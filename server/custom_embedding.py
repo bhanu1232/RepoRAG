@@ -1,5 +1,6 @@
 import os
 import requests
+import concurrent.futures
 from typing import List, Optional, Any
 from llama_index.core.embeddings import BaseEmbedding
 from pydantic import Field
@@ -62,7 +63,9 @@ class GeminiRESTEmbedding(BaseEmbedding):
         return self._embed(text)
 
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        return [self._embed(t) for t in texts]
+        # Use ThreadPoolExecutor to make concurrent API calls
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            return list(executor.map(self._embed, texts))
 
     async def _aget_query_embedding(self, query: str) -> List[float]:
         return self._embed(query)

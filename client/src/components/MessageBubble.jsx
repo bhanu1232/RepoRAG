@@ -141,19 +141,19 @@ const MessageBubble = ({ message, isLatest }) => {
                                             const match = /language-(\w+)/.exec(className || '');
                                             const codeString = String(children).replace(/\n$/, '');
 
-                                            // Detect Mermaid diagram
-                                            const isMermaid = (match && (match[1] === 'mermaid' || match[1] === 'graph')) ||
+                                            // Detect Mermaid diagram with strict check
+                                            const isMermaid = !inline && (
+                                                (match && ['mermaid', 'diagram'].includes(match[1].toLowerCase())) ||
                                                 (!match && (
-                                                    codeString.trim().startsWith('graph ') ||
+                                                    codeString.trim().startsWith('graph TD') ||
+                                                    codeString.trim().startsWith('graph LR') ||
                                                     codeString.trim().startsWith('sequenceDiagram') ||
                                                     codeString.trim().startsWith('classDiagram') ||
                                                     codeString.trim().startsWith('stateDiagram') ||
-                                                    codeString.trim().startsWith('erDiagram') ||
-                                                    codeString.trim().startsWith('flowchart') ||
-                                                    codeString.trim().startsWith('pie') ||
-                                                    codeString.trim().startsWith('gantt') ||
-                                                    codeString.trim().startsWith('mindmap')
-                                                ));
+                                                    codeString.trim().startsWith('flowchart TD') ||
+                                                    codeString.trim().startsWith('flowchart LR')
+                                                ))
+                                            );
 
                                             // Detect file tree
                                             const hasTreeChars = (codeString.includes('├──') || codeString.includes('└──')) && codeString.includes('│');
