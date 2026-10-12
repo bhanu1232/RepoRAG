@@ -5,15 +5,6 @@
 ## 🚀 Key Features
 
 -   **Deep Codebase Understanding**: Indexes your entire repository to provide context-aware answers.
--   **Advanced RAG Pipeline**:
-    -   **Staged Hybrid Filtering** ⚡ **NEW**: Production-grade three-stage filtering (pre-filter → vector search → post-filter)
-        -   **60% faster**: 18ms vs 45ms latency
-        -   **95% recall**: vs 87% baseline
-        -   **90% search space reduction**: 1M → 100K vectors
-    -   **Hybrid Retrieval**: Combines semantic search (vector embeddings) with keyword search for maximum accuracy.
-    -   **Smart Reranking**: Re-ranks search results based on query intent and relevance.
-    -   **Intent Classification**: Automatically detects if you need code, debugging help, or architectural insights.
-    -   **Automatic Filter Detection**: Extracts filters from natural language (e.g., "Python test files" → filters for Python + test files)
 -   **Elite Engineering Response**: 
     -   Produces detailed, structured markdown responses with code blocks, flowcharts, and architecture diagrams.
     -   Generates **Architecture Flowcharts** and UML diagrams on demand using Mermaid.js.
@@ -38,7 +29,7 @@
 
 ### Server (Backend)
 -   **Framework**: FastAPI (Python)
--   **AI/LLM**: Groq LLM Gateway (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `llama-3.3-70b-versatile` with automatic failover)
+-   **AI/LLM**: Groq LLM Gateway (`llama-3.3-70b-versatile`)
 -   **Embeddings**: Google Gemini REST Embeddings (`gemini-embedding-001` - 3,072 dimensions)
 -   **Vector Database**: Pinecone (`pinecone-client`)
 -   **Framework**: LlamaIndex (RAG orchestration)
@@ -53,7 +44,7 @@
     -   Upserts enriched vectors to Pinecone with real-time telemetry (live stopwatch, remaining time estimates, step-by-step pipeline).
 
 2.  **Retrieval Layer**:
-    -   **Hybrid Search**: Fetches relevant chunks using 3-stage hybrid filtering (Pinecone metadata pre-filter + vector search + AST complexity post-filter).
+    -   **Semantic Search**: Fetches relevant chunks using (Pinecone + AST complexity).
     -   **Reranking**: Uses a custom algorithm to score and re-order chunks based on query intent (e.g., prioritizing implementation details for coding questions).
 
 3.  **Generation Layer**:
@@ -63,7 +54,6 @@
 ## 🚀 Getting Started
 
 ### Prerequisites
--   Node.js (v18+)
 -   Python (v3.10+)
 -   Git
 -   API Keys:
@@ -125,15 +115,7 @@ npm run dev
     -   *Try asking: "Give me an architecture flowchart"*
     -   *Try asking: "Find the authentication logic"*
 
-## 🧪 Deployment
-
--   **Backend**: Ready for deployment on **Railway** or **Render** (Procfile included).
--   **Frontend**: Ready for **Vercel** or **Netlify**.
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please fork the repository and submit a pull request.
-
-## 📄 License
-
-MIT License
