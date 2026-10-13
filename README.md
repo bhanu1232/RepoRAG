@@ -12,7 +12,6 @@
     -   **Lazy Loading**: Services initialize only when needed to save resources.
     -   **Smart Caching**: Caches responses to common queries for instant replies.
     -   **Background Indexing**: Indexes repositories in the background with real-time progress updates.
-    -   **Staged Filtering**: Intelligent metadata-based filtering reduces search space by 90%
 -   **Premium Dark UI**:
     -   Fully enforced **Dark Mode** for a sleek, developer-focused experience.
     -   Modern glassmorphism-free, solid production-grade aesthetics.
@@ -39,12 +38,12 @@
 
 1.  **Ingestion Layer**:
     -   Clones the target GitHub repository.
-    -   Chunks code files into AST-aware semantic segments with line ranges.
+    -   Chunks code files into semantic segments with line ranges.
     -   Generates high-dimensional embeddings using Google Gemini REST.
     -   Upserts enriched vectors to Pinecone with real-time telemetry (live stopwatch, remaining time estimates, step-by-step pipeline).
 
 2.  **Retrieval Layer**:
-    -   **Semantic Search**: Fetches relevant chunks using (Pinecone + AST complexity).
+    -   **Semantic Search**: Fetches relevant chunks using (Pinecone).
     -   **Reranking**: Uses a custom algorithm to score and re-order chunks based on query intent (e.g., prioritizing implementation details for coding questions).
 
 3.  **Generation Layer**:
