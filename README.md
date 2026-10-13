@@ -1,6 +1,6 @@
-# RepoRAG Pro
+# RepoRAG
 
-**RepoRAG Pro** is an advanced, production-grade AI agent designed to help developers understand, debug, and navigate their codebase. By indexing GitHub repositories and utilizing a powerful RAG (Retrieval-Augmented Generation) pipeline, RepoRAG provides accurate, context-aware answers to complex technical queries.
+**RepoRAG** is an advanced, production-grade AI agent designed to help developers understand, debug, and navigate their codebase. By indexing GitHub repositories and utilizing a powerful RAG (Retrieval-Augmented Generation) pipeline, RepoRAG provides accurate, context-aware answers to complex technical queries.
 
 ## 🚀 Key Features
 
